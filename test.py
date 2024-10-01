@@ -8,6 +8,8 @@ from langchain_upstage import ChatUpstage
 from langchain.chains import RetrievalQA
 from langchain.chains.question_answering import load_qa_chain
 from concurrent.futures import ThreadPoolExecutor
+import re
+from datetime import datetime
 
 # Upstage API 키 설정
 os.environ["UPSTAGE_API_KEY"] = "up_coecXafSJVG1v17EEZ3lxjFbZ8xcD"
@@ -51,8 +53,17 @@ def initialize_models(texts):
     if qa_chain is None:
         qa_chain = load_qa_chain(llm=upstage_llm, chain_type="stuff")
 
+def get_latest_wr_id():
+    url = "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1"
+    response = requests.get(url)
+    if response.status_code == 200:
+        match = re.search(r'wr_id=(\d+)', response.text)
+        if match:
+            return int(match.group(1))
+    return None
+
 # 스크래핑할 URL 목록 생성
-now_number = 28233
+now_number = get_latest_wr_id()
 urls = []
 for number in range(now_number, now_number-30, -1):
     urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
@@ -80,10 +91,36 @@ initialize_models(texts)
 # RetrievalQA 체인 생성
 qa = RetrievalQA(combine_documents_chain=qa_chain, retriever=vectorstore.as_retriever())
 
-# get_ai_message 함수
 def get_ai_message(user_question):
     try:
-        ai_message = qa.invoke(user_question)
-        return ai_message.get("result")
+        # 현재 시간 가져오기
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # 사용자 질문에 현재 시간을 포함하여 맥락 생성
+        context_question = f"{user_question} [현재 시간: {current_time}]"
+        
+        # 질문을 통해 초기 응답 생성
+        ai_message = qa.invoke(context_question)
+        
+        # 결과 확인
+        result = ai_message.get("result")
+        
+        # 결과가 비어있거나 정보가 부족한 경우
+        if not result or "정보는 주어진 텍스트에 명시되어 있지 않습니다." in result or "현재 시간 정보를 알 수 없습니다" in result:
+            # 최근 문서 정보 가져오기
+            recent_info = vectorstore.similarity_search(user_question, k=3)  # 유사한 문서 3개 검색
+            if recent_info:
+                # 검색된 문서의 내용을 활용해 재질문
+                combined_context = " ".join([doc.page_content for doc in recent_info])
+                enhanced_question = f"{combined_context} {context_question}"
+                
+                # 새로운 질문으로 응답 생성
+                ai_message = qa.invoke(enhanced_question)
+                result = ai_message.get("result")
+                
+                # 여전히 정보가 부족하다면 기본 응답 제공
+                if not result:
+                    result = "죄송합니다. 해당 정보는 아직 확인되지 않았습니다."
+
+        return result
     except Exception as e:
         return f"답변을 생성하는 중 오류가 발생했습니다: {e}"
