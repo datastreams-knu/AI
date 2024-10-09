@@ -1,5 +1,3 @@
-# 문제점 : 답변이 문서 그대로 답변해주는 방식으로 출력됨.
-
 import os
 import requests
 from bs4 import BeautifulSoup
@@ -20,7 +18,7 @@ import re
 from datetime import datetime
 import pytz
 from langchain.schema.runnable import Runnable
-from langchain.chains import RetrievalQA
+from langchain.chains import RetrievalQAWithSourcesChain, RetrievalQA
 
 # Pinecone API 키와 인덱스 이름 선언
 pinecone_api_key = 'cd22a6ee-0b74-4e9d-af1b-a1e83917d39e'  # 여기에 Pinecone API 키를 입력
@@ -75,7 +73,7 @@ def get_latest_wr_id():
 # 스크래핑할 URL 목록 생성
 now_number = get_latest_wr_id()
 urls = []
-for number in range(now_number, now_number-100, -1):
+for number in range(now_number, now_number-20, -1):
     urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
 
 # URL에서 문서와 날짜 추출
@@ -234,7 +232,7 @@ def get_answer_from_chain(best_docs):
 
 
 # AI 답변 생성 및 출처 URL 포함 함수
-def generate_answer_and_sources(question):
+def get_ai_message(question):
     top_docs = get_best_docs(question)  # 가장 유사한 문서 가져오기
     qa_chain, retriever = get_answer_from_chain(top_docs)  # 답변 생성 체인 생성
 
@@ -251,10 +249,12 @@ def generate_answer_and_sources(question):
     )
 
     final_answer = refined_chain({"query": question})  # 리파인된 최종 답변 생성
+    
+    answer_result = final_answer.get('result')
 
     # 상위 3개의 참조한 문서의 URL 포함 형식으로 반환
-    doc_references = "\n".join([f"참고 문서 URL: {doc[1]}" for doc in top_docs[:3] if doc[1] != 'No URL'])  # 상위 3개 문서만 선택
+    doc_references = "\n".join([f"\n참고 문서 URL: {doc[1]}" for doc in top_docs[:3] if doc[1] != 'No URL'])  # 상위 3개 문서만 선택
 
     # AI의 최종 답변과 참조 URL을 함께 반환
-    return f"{final_answer}\n\n{doc_references}"
+    return f"{answer_result}\n\n------------------------------------------------\n항상 정확한 답변을 제공하지 못할 수 있습니다.\n아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.\n{doc_references}"
 
