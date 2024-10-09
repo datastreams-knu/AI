@@ -1,5 +1,5 @@
 import streamlit as st
-from test import get_ai_message
+from ensemble_refine import get_ai_message
 
 st.set_page_config(page_title="경북대학교 공지사항 챗봇")
 st.title("CHAT BOT")
