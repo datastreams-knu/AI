@@ -558,7 +558,9 @@ def get_ai_message(question):
     else:
         qa_chain, retriever, relevant_docs = get_answer_from_chain(top_docs, question)  # 답변 생성 체인 생성
         # 초기 답변 생성
-        existing_answer = qa_chain.invoke({"query": question})  # 초기 답변 생성 및 문자열로 할당
+        # 만약 밑에 invoke 안되면 아래 "query" : question 형식으로 바꿔서 코드 작성
+        # existing_answer = qa_chain.invoke({"query": question})  # 초기 답변 생성 및 문자열로 할당
+        existing_answer = qa_chain.invoke(question)
         #print(existing_answer)
         # Refine 체인에서 질문과 관련성 높은 문서만 유지
         refined_chain = RetrievalQA.from_chain_type(
