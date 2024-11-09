@@ -13,7 +13,7 @@ from langchain.prompts import PromptTemplate
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
 from langchain.schema import Document
-from langchain_community.vectorstores import FAISS
+from langchain.vectorstores import FAISS
 import re
 from datetime import datetime
 import pytz
@@ -31,16 +31,18 @@ from IPython.display import display, HTML
 import numpy as np
 from rank_bm25 import BM25Okapi
 from konlpy.tag import Okt
+from difflib import SequenceMatcher
 # Pinecone API 키와 인덱스 이름 선언
-pinecone_api_key = 'cd22a6ee-0b74-4e9d-af1b-a1e83917d39e'  # 여기에 Pinecone API 키를 입력
-index_name = 'test-bm25'
+pinecone_api_key = '423c8b35-3b1a-46fb-aebb-e20c9a36dba1'  # 여기에 Pinecone API 키를 입력
+index_name = 'test'
 
 # Upstage API 키 선언
-upstage_api_key = 'up_pGRnryI1JnrxChGycZmswEZm934Tf'  # 여기에 Upstage API 키를 입력
+upstage_api_key = 'up_yKqThHL17ZcjIGzeOxYkYCaTVqyLb'  # 여기에 Upstage API 키를 입력
 
 # Pinecone API 설정 및 초기화
 pc = Pinecone(api_key=pinecone_api_key)
 index = pc.Index(index_name)
+
 
 
 # URL에서 제목, 날짜, 내용(본문 텍스트와 이미지 URL) 추출하는 함수
@@ -107,7 +109,7 @@ def get_latest_wr_id():
 # 스크래핑할 URL 목록 생성
 now_number = get_latest_wr_id()
 urls = []
-for number in range(now_number, now_number - 10, -1):     #2024-08-07 수강신청 안내시작..28148
+for number in range(now_number, 27726, -1):     #2024-08-07 수강신청 안내시작..28148
     urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
 
 # URL에서 문서와 날짜 추출
@@ -201,7 +203,11 @@ def transformed_query(content):
     if '튜터' in content:
         query_nouns.append('TUTOR')
         content = content.replace('튜터', '')  # '튜터' 제거
-
+    if '탑싯' in content:
+        query_nouns.append('TOPCIT')
+        content=content.replace('탑싯','')
+    if '시험' in content:
+        query_nouns.append('시험')
     # 5. Okt 형태소 분석기를 이용한 추가 명사 추출
     okt = Okt()
     additional_nouns = [noun for noun in okt.nouns(content) if len(noun) >= 1]
@@ -254,13 +260,12 @@ def levenshtein_similarity(title1, title2):
     # 유사도 계산 (편집 거리 / 최대 길이로 나누어 정규화)
     return 1 - (distance / max(len(title1), len(title2)))
 
-from difflib import SequenceMatcher
+
 def best_docs(user_question):
       # 사용자 질문
       okt = Okt()
       query_noun=transformed_query(user_question)
-      # print(f"=================\n\n question: {user_question} 추출된 명사: {query_noun}")
-
+      #print(f"=================\n\n question: {user_question} 추출된 명사: {query_noun}")
       title_question_similarities = bm25_titles.get_scores(query_noun)  # 제목과 사용자 질문 간의 유사도
       title_question_similarities/=27
 
@@ -276,7 +281,9 @@ def best_docs(user_question):
                   similarities[idx] += 0.2 * len(matching_nouns)
               # query_noun에 "대학원"이 없고 제목에 "대학원"이 포함된 경우 유사도를 0.1 감소
               if "대학원" not in query_noun and "대학원" in title:
-                  similarities[idx] -= 0.5
+                  similarities[idx] -= 1
+              if "파일럿" not in query_noun and "파일럿" in title:
+                  similarities[idx]-=1
               # 본문 내용이 "No content"인 경우 유사도 0.5 추가 (조정값은 필요에 따라 변경 가능)
               if texts[idx] == "No content":
                   similarities[idx] *=2.1  # 본문이 "No content"인 경우 유사도를 높임
@@ -290,7 +297,7 @@ def best_docs(user_question):
       # 유사도 기준 상위 15개 문서 선택
       top_20_titles_idx = np.argsort(title_question_similarities)[-20:][::-1]
 
-      #  # 결과 출력
+       # 결과 출력
       # print("최종 정렬된 BM25 문서:")
       # for idx in top_20_titles_idx:  # top_20_titles_idx에서 각 인덱스를 가져옴
       #     print(f"  제목: {titles[idx]}")
@@ -300,14 +307,6 @@ def best_docs(user_question):
 
       Bm25_best_docs = [(titles[i], doc_dates[i], texts[i], doc_urls[i],image_url[i]) for i in top_20_titles_idx]
 
-      # # 출력 예시
-      # for doc in Bm25_best_docs:
-      #     print(f"Title: {doc[0]}")
-      #     print(f"Date: {doc[1]}")
-      #     print(f"Text: {len(doc[2])}")
-      #     print(f"URL: {doc[3]}")
-      #     #print(f"Image URL: {len(doc[4])}")
-      #     print("-" * 40)
       ####################################################################################################
 
       # 1. Dense Retrieval - Text 임베딩 기반 20개 문서 추출
@@ -336,7 +335,7 @@ def best_docs(user_question):
       #################################################3#################################################3
       #####################################################################################################3
 
-      # 1. 본문 임베딩 기반 문서 추출 결과 출력
+      #1. 본문 임베딩 기반 문서 추출 결과 출력
       # print("본문 기반 유사도:")
       # for idx, doc in enumerate(pinecone_docs_text):
       #     title, date, text, url = doc
@@ -407,7 +406,7 @@ def best_docs(user_question):
       # 유사도 기준으로 내림차순 정렬
       combine_dense_docs.sort(key=lambda x: x[0], reverse=True)
 
-      # # 결과 출력
+      # 결과 출력
       # print("\n통합된 파인콘문서 유사도:")
       # for score, doc in combine_dense_docs:
       #     title, date, text, url = doc
@@ -502,7 +501,7 @@ def best_docs(user_question):
           return adjusted_docs
 
 
-      def cluster_documents_by_similarity(docs, threshold=0.8):
+      def cluster_documents_by_similarity(docs, threshold=0.7):
           clusters = []
 
           for doc in docs:
@@ -528,32 +527,25 @@ def best_docs(user_question):
           return clusters
 
 
-      def filter_and_sort_clusters(query_noun, clusters):
-          date_patterns = [
-              r"\d{4}학년도",    # 2024학년도와 같은 형식
-              r"\d{4}년",        # 2020년과 같은 형식
-              r"\d{1,2}월",      # 10월과 같은 형식
-              r"\d{1,2}일",      # 1일과 같은 형식
-              r"\d{1,2}시",      # 3시와 같은 형식
-              r"\d{1,2}분",      # 15분과 같은 형식
-              r"\d{1,2}초"       # 30초와 같은 형식
-          ]
-
+      def filter_and_sort_clusters(query_nouns, clusters):
+          # 숫자가 포함되어 있는지 확인하는 정규 표현식 패턴
+          number_pattern = r"\d"
+          # query_noun에 숫자가 포함되어 있는지 확인
           # 특정 키워드도 함께 확인합니다.
           keywords = ["최근", "최신", "현재", "지금"]
 
-          # query_noun에 패턴이나 키워드가 포함되어 있는지 확인합니다.
-          if (not any(re.search(pattern, word) for word in query_noun for pattern in date_patterns)
-        and any(keyword in word for word in query_noun for keyword in keywords)):
-              # clusters를 조건에 맞게 정렬합니다.
-              clusters = sorted(clusters, key=lambda cluster: max(doc[0] for doc in cluster), reverse=True)
-              best_cluster = clusters[0]
-              sorted_cluster = sorted(best_cluster, key=lambda doc: doc[1], reverse=True)  # 작성일 기준 내림차순 정렬
+          if (any(keyword in word for word in query_nouns for keyword in keywords) or not any(re.search(number_pattern, word) for word in query_nouns)):
+              # 숫자가 없으면 날짜 기준으로 클러스터 정렬
+                clusters = sorted(clusters, key=lambda cluster: max(doc[0] for doc in cluster), reverse=True)
+                best_cluster = clusters[0]
+                sorted_cluster = sorted(best_cluster, key=lambda doc: doc[2], reverse=True)  # 날짜 기준 내림차순 정렬       
           else:
-              clusters = sorted(clusters, key=lambda cluster: max(doc[0] for doc in cluster), reverse=True)
-              sorted_cluster = sorted(clusters[0], key=lambda doc: doc[0], reverse=True)  # 유사도 기준 내림차순 정렬
-          return sorted_cluster
+            # 숫자가 포함된 경우 유사도 기준으로 클러스터 정렬
+            clusters = sorted(clusters, key=lambda cluster: max(doc[0] for doc in cluster), reverse=True)
+            best_cluster = clusters[0]
+            sorted_cluster = sorted(best_cluster, key=lambda doc: doc[0], reverse=True)  # 유사도 기준 내림차순 정렬
 
+          return sorted_cluster
       # Step 1: Adjust similarity scores based on the presence of query_noun
       adjusted_final_best_docs = adjust_final_docs_similarity(query_noun, final_best_docs)
 
@@ -567,17 +559,40 @@ def best_docs(user_question):
 
       # Step 2: Cluster documents by similarity
       clusters = cluster_documents_by_similarity(adjusted_final_best_docs)
+      # def print_clusters(clusters):
+      #     print("\n\n--- 클러스터 정보 ---")
+      #     for cluster_idx, cluster in enumerate(clusters):
+      #         print(f"\n클러스터 {cluster_idx + 1} (문서 수: {len(cluster)}):")
+      #         for doc_idx, doc in enumerate(cluster):
+      #             score, title, date, text, url, image_url = doc  # 각 문서 정보 추출
+      #             print(f"  문서 {doc_idx + 1}:")
+      #             print(f"    제목: {title}")
+      #             print(f"    유사도: {score}")
+      #             print(f"    날짜: {date}")
+      #             print(f"    URL: {url}")
+      #             print("    " + "-" * 40)
+      #         print("=" * 60)
+
+      # # 클러스터 정보를 보기 쉽게 출력
+      #print_clusters(clusters)
+
+      query_nouns=transformed_query(user_question)
+ 
       # Step 3: Filter and sort clusters based on query_noun
-      final_best_docs = filter_and_sort_clusters(query_noun, clusters)
+      final_best_docs = filter_and_sort_clusters(query_nouns, clusters)
 
+      top_title = final_best_docs[0][1]  # 최상위 문서의 제목 가져오기
 
-      # Step 4: 결과 출력
+      # Step 3: 최상위 문서와 동일한 제목을 가진 문서 필터링 및 개수 카운트
+      result_docs = [doc for doc in final_best_docs if doc[1] == top_title]
+      top_title_count = len(result_docs)
+      # # Step 4: 결과 출력
       # print("\n\n\n\n최종 상위 문서 (유사도 및 날짜 기준 정렬):")
-      # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(final_best_docs):
+      # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(result_docs):
       #     print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor}, 날짜: {dat}, URL: {ur}")
       #     print("-" * 50)
 
-      return final_best_docs[:2]
+      return result_docs[:top_title_count]
 
 
 # 프롬프트 템플릿 정의
@@ -618,6 +633,8 @@ PROMPT = PromptTemplate(
     input_variables=["current_time", "context", "question"]
 )
 
+
+
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
@@ -637,8 +654,10 @@ def get_answer_from_chain(best_docs, user_question):
     # 사용자 질문을 전처리하여 공백 제거 후 명사만 추출
     okt = Okt()
     query_nouns=transformed_query(user_question)
-    #print(query_nouns)
+    # print(query_nouns)
+    # print(documents)
     relevant_docs = [doc for doc in documents if any(keyword in doc.page_content for keyword in query_nouns)]
+#print(relevant_docs)
     if not relevant_docs:
       return None, None, None
     vector_store = FAISS.from_documents(relevant_docs, embeddings)
@@ -658,15 +677,60 @@ def get_answer_from_chain(best_docs, user_question):
 
     return qa_chain, retriever, relevant_docs  # retriever를 반환
 
+
+
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+def get_answer_from_chain(best_docs, user_question):
+    documents = []
+    if doc[3]!="No content":
+      doc_titles= [doc[1] for doc in best_docs]
+      doc_dates=[doc[2] for doc in best_docs]
+      doc_texts = [doc[3] for doc in best_docs]
+      doc_urls = [doc[4] for doc in best_docs]  # URL을 별도로 저장
+
+    documents = [
+        Document(page_content=text, metadata={"title": title, "url": url, "doc_date": datetime.strptime(date, '작성일%y-%m-%d %H:%M')})
+        for title, text, url, date in zip(doc_titles, doc_texts, doc_urls, doc_dates)
+    ]
+    # 키워드 기반 관련성 필터링 추가 (질문과 관련 없는 문서 제거)
+    # 사용자 질문을 전처리하여 공백 제거 후 명사만 추출
+    okt = Okt()
+    query_nouns=transformed_query(user_question)
+    # print(query_nouns)
+    # print(documents)
+    relevant_docs = [doc for doc in documents if any(keyword in doc.page_content for keyword in query_nouns)]
+#print(relevant_docs)
+    if not relevant_docs:
+      return None, None, None
+    vector_store = FAISS.from_documents(relevant_docs, embeddings)
+    retriever = vector_store.as_retriever()
+    llm = ChatUpstage(api_key=upstage_api_key)
+    # PromptTemplate 인스턴스 사용
+    qa_chain = (
+        {
+            "current_time": lambda _: get_korean_time().strftime("%Y년 %m월 %d일 %H시 %M분"),
+            "context": retriever | format_docs,
+            "question": RunnablePassthrough()
+        }
+        | PROMPT
+        | llm
+        | StrOutputParser()
+    )
+
+    return qa_chain, retriever, relevant_docs  # retriever를 반환
+
+
 ##### 유사도 제목 날짜 본문  url image_url순으로 저장됨
 def get_ai_message(question):
     top_docs = best_docs(question)  # 가장 유사한 문서 가져오기
     #print(top_docs)
     # for docs in top_docs:
     #     if len(docs) == 5:
-    #         print(f"len(docs)==5 \ntitles: {docs[1]}\n text:{(docs[3])} \ndoc_dates: {docs[2]} \nURL: {docs[4]}")
+    #         print(f"len(docs)==5 \ntitles: {docs[1]}\n text:{(len(docs[3]))} \ndoc_dates: {docs[2]} \nURL: {docs[4]}")
     #     else:
-    #         print(f"len(docs)==6\ntitles:   {docs[1]}\n text:{(docs[3])} \ndoc_dates: {docs[2]}\n URL: {docs[4]}")
+    #         print(f"len(docs)==6\ntitles:   {docs[1]}\n text:{(len(docs[3]))} \ndoc_dates: {docs[2]}\n URL: {docs[4]}")
 
     ### top_docs에 이미지 URL이 들어있다면?
     if len(top_docs[0])==6 and top_docs[0][5]!="No content" and top_docs[0][4]=="No content":
@@ -693,11 +757,11 @@ def get_ai_message(question):
     else:
         qa_chain, retriever, relevant_docs = get_answer_from_chain(top_docs, question)  # 답변 생성 체인 생성
 
-       # print(relevant_docs)
+        #print(relevant_docs)
         image_display = ""
         seen_img_urls = set()  # 이미 출력된 이미지 URL을 추적하는 set
-        # print(len(top_docs[0][5]))
         if (len(top_docs[0]) == 6 and top_docs[0][5] != "No content"):
+            print("OK")
             for img_url in top_docs[0][5]:  # 여러 이미지 URL에 대해 반복
                 if img_url not in seen_img_urls:  # img_url이 이미 출력되지 않은 경우
                     image_display += f"<img src='{img_url}' alt='관련 이미지' style='max-width: 500px; max-height: 500px;' /><br>"
@@ -709,27 +773,29 @@ def get_ai_message(question):
           return f"\n\n해당 질문은 공지사항에 없는 내용이거나 본문 내용을 이미지로 확인하실 수 있습니다.\n 자세한 사항은 공지사항을 살펴봐주세요.\n\n{url}"
         existing_answer = qa_chain.invoke(question)# 초기 답변 생성 및 문자열로 할당
 
-        # Refine 체인에서 질문과 관련성 높은 문서만 유지
-        refined_chain = RetrievalQA.from_chain_type(
-            llm=ChatUpstage(api_key=upstage_api_key),  # LLM으로 Upstage 사용
-            chain_type="refine",  # refine 방식 지정
-            retriever=retriever,  # retriever를 사용
-            return_source_documents=True,  # 출처 문서 반환
-            verbose=True  # 디버깅용 상세 출력
-        )
+##########################################stuff 테스트###################
 
-        # 리파인된 최종 답변 생성
-        final_answer = refined_chain.stream({
-            "query": question,
-            "existing_answer": existing_answer,  # 초기 답변을 전달하여 리파인
-            "context": format_docs(relevant_docs)  # 문맥 정보 전달
-        })
+        answer_result=existing_answer
+##############################################################################
 
-        # 최종 답변 결과 추출
-        answer_result = ""
-        for chunk in final_answer:
-            answer_result += chunk.get('result', "")  # 각 청크에서 'result' 추출하여 answer_result에 추가
+        # # Refine 체인에서 질문과 관련성 높은 문서만 유지
+        # refined_chain = RetrievalQA.from_chain_type(
+        #     llm=ChatUpstage(api_key=upstage_api_key),  # LLM으로 Upstage 사용
+        #     chain_type="refine",  # refine 방식 지정
+        #     retriever=retriever,  # retriever를 사용
+        #     return_source_documents=True,  # 출처 문서 반환
+        #     verbose=True  # 디버깅용 상세 출력
+        # )
 
+        # # 리파인된 최종 답변 생성
+        # final_answer = refined_chain.invoke({
+        #     "query": question,
+        #     "existing_answer": existing_answer,  # 초기 답변을 전달하여 리파인
+        #     "context": format_docs(relevant_docs)  # 문맥 정보 전달
+        # })
+
+        # # 최종 답변 결과 추출
+        # answer_result = final_answer.get('result')
 
         # 상위 3개의 참조한 문서의 URL 포함 형식으로 반환
         doc_references = "\n".join([
@@ -738,5 +804,12 @@ def get_ai_message(question):
         ])
         # AI의 최종 답변과 참조 URL을 함께 반환
         return f"{answer_result}\n\n------------------------------------------------\n항상 정확한 답변을 제공하지 못할 수 있습니다.\n아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.\n{doc_references}"
+    
+
+
+
+    
+
+
 
 
