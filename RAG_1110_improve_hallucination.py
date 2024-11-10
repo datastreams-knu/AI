@@ -697,3 +697,67 @@ def get_answer_from_chain(best_docs, user_question):
     )
 
     return qa_chain, retriever, relevant_docs  # retriever를 반환
+
+
+##### 유사도 제목 날짜 본문  url image_url순으로 저장됨
+def get_ai_message(question):
+    top_doc = best_docs(question)  # 가장 유사한 문서 가져오기
+    top_docs = [list(doc) for doc in top_doc]
+    print(f"\ntitles: {top_docs[0][1]} similarity: {top_docs[0][0]}, text:{(len(top_docs[0][3]))} doc_dates: {top_docs[0][2]} URL: {top_docs[0][4]}")
+    ### top_docs에 이미지 URL이 들어있다면?
+    if len(top_docs[0])==6 and top_docs[0][5]!="No content" and top_docs[0][3]=="No content" and top_docs[0][0]>1.8:
+           # image_display 초기화 및 여러 이미지 처리
+         #print("첫번째 조건 만족")
+         image_display = ""
+         for img_url in top_docs[0][5]:  # 여러 이미지 URL에 대해 반복
+             image_display += f"<img src='{img_url}' alt='관련 이미지' style='max-width: 500px; max-height: 500px;' /><br>"
+         doc_references = top_docs[0][4]
+         # content 초기화
+         content = []
+        # top_docs의 내용 확인
+         if top_docs[0][3] == "No content":
+             content = []  # No content일 경우 비우기
+         else:
+             content = top_docs[0][3]  # content에 top_docs[0][3] 내용 저장
+         if content:
+            html_output = f"{image_display}<p>{content}</p><hr>\n"
+         else:
+            html_output = f"{image_display}<p>>\n"
+        # HTML 출력 및 반환할 내용 생성
+         display(HTML(image_display))
+         return  f"<p>항상 정확한 답변을 제공하지 못할 수 있습니다.아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.\n{doc_references}"
+
+    else:
+        qa_chain, retriever, relevant_docs = get_answer_from_chain(top_docs, question)  # 답변 생성 체인 생성
+
+        image_display = ""
+        seen_img_urls = set()  # 이미 출력된 이미지 URL을 추적하는 set
+        if (top_docs[0][5] != "No content"):
+            #print("Ok")
+            for img_url in top_docs[0][5]:  # 여러 이미지 URL에 대해 반복
+                if img_url not in seen_img_urls:  # img_url이 이미 출력되지 않은 경우
+                    image_display += f"<img src='{img_url}' alt='관련 이미지' style='max-width: 500px; max-height: 500px;' /><br>"
+                    seen_img_urls.add(img_url)  # img_url을 set에 추가하여 중복을 방지
+        doc_references = top_docs[0][4]
+
+        if not qa_chain or not relevant_docs:
+          if (top_docs[0][5]!="No content") and top_docs[0][0]>1.8:
+            display(HTML(image_display))
+            url=doc_references
+            return f"\n\n해당 질문에 대한 내용은 이미지 파일로 확인해주세요.\n 자세한 사항은 공지사항을 살펴봐주세요.\n\n{url}"
+          else:
+            url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1"
+          return f"\n\n해당 질문은 공지사항에 없는 내용입니다.\n 자세한 사항은 공지사항을 살펴봐주세요.\n\n{url}"
+        if (top_docs[0][0]<1.8):
+          url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1"
+          return f"\n\n해당 질문은 공지사항에 없는 내용입니다.\n 자세한 사항은 공지사항을 살펴봐주세요.\n\n{url}"
+        existing_answer = qa_chain.invoke(question)# 초기 답변 생성 및 문자열로 할당
+        answer_result=existing_answer
+        display(HTML(image_display))
+        # 상위 3개의 참조한 문서의 URL 포함 형식으로 반환
+        doc_references = "\n".join([
+            f"\n참고 문서 URL: {doc.metadata['url']}"
+            for doc in relevant_docs[:1] if doc.metadata.get('url') != 'No URL'
+        ])
+        # AI의 최종 답변과 참조 URL을 함께 반환
+        return f"{answer_result}\n\n------------------------------------------------\n항상 정확한 답변을 제공하지 못할 수 있습니다.\n아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.\n{doc_references}"
