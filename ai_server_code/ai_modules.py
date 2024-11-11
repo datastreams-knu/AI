@@ -13,7 +13,7 @@ from langchain.prompts import PromptTemplate
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
 from langchain.schema import Document
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 import re
 from datetime import datetime
 import pytz
@@ -142,6 +142,100 @@ def extract_professor_info_from_urls(urls):
 
     return all_data
 
+def extract_professor_info_from_urls_2(urls):
+    all_data = []
+
+    def fetch_professor_info(url):
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # 교수 정보가 담긴 요소들 선택
+            professor_elements = soup.find("div", id="Student").find_all("li")
+
+            for professor in professor_elements:
+                # 이미지 URL 추출
+                image_element = professor.find("div", class_="img").find("img")
+                image_content = image_element["src"] if image_element else "Unknown Image URL"
+
+                # 이름 추출
+                name_element = professor.find("div", class_="cnt").find("div", class_="name")
+                title = name_element.get_text(strip=True) if name_element else "Unknown Name"
+
+                # 연락처와 이메일 추출
+                contact_place = professor.find("div", class_="dep").get_text(strip=True) if professor.find("div", class_="dep") else "Unknown Contact Place"
+                email_element = professor.find("dl", class_="email").find("dd").find("a")
+                email = email_element.get_text(strip=True) if email_element else "Unknown Email"
+
+                # 텍스트 내용 조합
+                text_content = f"성함(이름):{title}, 연구실(장소):{contact_place}, 이메일:{email}"
+
+                # 날짜와 URL 설정
+                date = "작성일24-01-01 00:00"
+                prof_url = url
+
+                # 각 교수의 정보를 all_data에 추가
+                all_data.append((title, text_content, image_content, date, prof_url))
+
+        except Exception as e:
+            print(f"Error processing {url}: {e}")
+
+    # ThreadPoolExecutor를 이용하여 병렬 크롤링
+    with ThreadPoolExecutor() as executor:
+        executor.map(fetch_professor_info, urls)
+
+    return all_data
+
+def extract_professor_info_from_urls_3(urls):
+    all_data = []
+
+    def fetch_professor_info(url):
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # 교수 정보가 담긴 요소들 선택
+            professor_elements = soup.find("div", id="Student").find_all("li")
+
+            for professor in professor_elements:
+                # 이미지 URL 추출
+                image_element = professor.find("div", class_="img").find("img")
+                image_content = image_element["src"] if image_element else "Unknown Image URL"
+
+                # 이름 추출
+                name_element = professor.find("div", class_="cnt").find("h1")
+                title = name_element.get_text(strip=True) if name_element else "Unknown Name"
+
+                # 연락처 추출
+                contact_number_element = professor.find("span", class_="period")
+                contact_number = contact_number_element.get_text(strip=True) if contact_number_element else "Unknown Contact Number"
+
+                # 연구실 위치 추출
+                contact_info = professor.find_all("dl", class_="dep")
+                contact_place = contact_info[0].find("dd").get_text(strip=True) if len(contact_info) > 0 else "Unknown Contact Place"
+
+                # 이메일 추출
+                email = contact_info[1].find("dd").find("a").get_text(strip=True) if len(contact_info) > 1 else "Unknown Email"
+
+                # 텍스트 내용 조합
+                text_content = f"성함(이름):{title}, 연락처(전화번호):{contact_number}, 사무실(장소):{contact_place}, 이메일:{email}"
+
+                # 날짜와 URL 설정
+                date = "작성일24-01-01 00:00"
+                prof_url = url
+
+                # 각 교수의 정보를 all_data에 추가
+                all_data.append((title, text_content, image_content, date, prof_url))
+
+        except Exception as e:
+            print(f"Error processing {url}: {e}")
+
+    # ThreadPoolExecutor를 이용하여 병렬 크롤링
+    with ThreadPoolExecutor() as executor:
+        executor.map(fetch_professor_info, urls)
+
+    return all_data
+
 
 # 최신 wr_id 추출 함수
 def get_latest_wr_id():
@@ -165,9 +259,21 @@ urls2 = [
     "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&lang=kor",
 ]
 
+urls3 = [
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor",
+]
+
+urls4 = [
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5&lang=kor",
+]
+
 # URL에서 문서와 날짜 추출
 document_data = extract_text_and_date_from_url(urls)
 prof_data = extract_professor_info_from_urls(urls2)
+prof_data_2 = extract_professor_info_from_urls_2(urls3)
+prof_data_3 = extract_professor_info_from_urls_3(urls4)
+
+combined_prof_data = prof_data + prof_data_2 + prof_data_3
 
 # 텍스트 분리기 초기화
 class CharacterTextSplitter:
@@ -226,7 +332,7 @@ professor_doc_urls = []
 professor_doc_dates = []
 
 # prof_data는 extract_professor_info_from_urls 함수의 반환값
-for title, doc, image, date, url in prof_data:
+for title, doc, image, date, url in combined_prof_data :
     if isinstance(doc, str) and doc.strip():  # 교수 정보가 문자열로 있고 비어있지 않을 때
         split_texts = text_splitter.split_text(doc)
         professor_texts.extend(split_texts)
@@ -472,11 +578,11 @@ def best_docs(user_question):
       combine_dense_docs.sort(key=lambda x: x[0], reverse=True)
 
       ## 결과 출력
-      print("\n통합된 파인콘문서 유사도:")
-      for score, doc in combine_dense_docs:
-          title, date, text, url = doc
-          print(f"제목: {title}\n유사도: {score} {url}")
-          print('---------------------------------')
+      # print("\n통합된 파인콘문서 유사도:")
+      # for score, doc in combine_dense_docs:
+      #     title, date, text, url = doc
+      #     print(f"제목: {title}\n유사도: {score} {url}")
+      #     print('---------------------------------')
 
 
       #################################################3#################################################3
@@ -525,10 +631,10 @@ def best_docs(user_question):
 
 
 
-      print("\n\n\n\n필터링 전 최종문서 (유사도 큰 순):")
-      for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(final_best_docs):
-          print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor},본문 {len(tex)} 날짜: {dat}, URL: {ur}")
-          print("-" * 50)
+      # print("\n\n\n\n필터링 전 최종문서 (유사도 큰 순):")
+      # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(final_best_docs):
+      #     print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor},본문 {len(tex)} 날짜: {dat}, URL: {ur}")
+      #     print("-" * 50)
 
 
 
@@ -797,13 +903,15 @@ def get_ai_message(question):
             f"\n참고 문서 URL: {doc.metadata['url']}"
             for doc in relevant_docs[:1] if doc.metadata.get('url') != 'No URL'
         ])
+        # AI의 최종 답변과 참조 URL을 함께 반환
         # JSON 형식으로 반환
         data = {
         "answer": answer_result,
         "references": doc_references,
         "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요."
         }
-
+	
+        import json
         # JSON 직렬화
         json_response = json.dumps(data, ensure_ascii=False)
 
