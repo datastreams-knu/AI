@@ -538,7 +538,7 @@ def best_docs(user_question):
               # query_nouns에 없는 키워드가 본문에 포함되었는지 확인
               if any(keyword in text for keyword in ['계약학과', '대학원', '타대학원']) and not any(keyword in query_noun for keyword in ['계약학과', '대학원', '타대학원']):
                   score -= 0.1  # 유사도 점수를 0.1 낮추기
-              if (not ('대학원' in query_noun) and '대학원' in title):
+              if '대학원' not in query_noun and '대학원생' not in query_noun and ('대학원' in title or '대학원생' in title):
                   score-=1
               # 조정된 유사도 점수를 사용하여 다시 리스트에 저장
               Final_best[idx] = (score, title, date, text,  url, image)
