@@ -488,6 +488,7 @@ for i, embedding in enumerate(dense_doc_vectors):
 
 
 
+
 def best_docs(user_question):
       # 사용자 질문
       okt = Okt()
@@ -543,12 +544,12 @@ def best_docs(user_question):
       top_20_titles_idx = np.argsort(title_question_similarities)[-20:][::-1]
 
        # 결과 출력
-      # print("최종 정렬된 BM25 문서:")
-      # for idx in top_20_titles_idx:  # top_20_titles_idx에서 각 인덱스를 가져옴
-      #     print(f"  제목: {titles[idx]}")
-      #     print(f"  유사도: {title_question_similarities[idx]}")
-      #     print(f" URL: {doc_urls[idx]}")
-      #     print("-" * 50)
+      print("최종 정렬된 BM25 문서:")
+      for idx in top_20_titles_idx:  # top_20_titles_idx에서 각 인덱스를 가져옴
+          print(f"  제목: {titles[idx]}")
+          print(f"  유사도: {title_question_similarities[idx]}")
+          print(f" URL: {doc_urls[idx]}")
+          print("-" * 50)
 
       Bm25_best_docs = [(titles[i], doc_dates[i], texts[i], doc_urls[i],image_url[i]) for i in top_20_titles_idx]
 
@@ -583,11 +584,11 @@ def best_docs(user_question):
       combine_dense_docs.sort(key=lambda x: x[0], reverse=True)
 
       ## 결과 출력
-      # print("\n통합된 파인콘문서 유사도:")
-      # for score, doc in combine_dense_docs:
-      #     title, date, text, url = doc
-      #     print(f"제목: {title}\n유사도: {score} {url}")
-      #     print('---------------------------------')
+      print("\n통합된 파인콘문서 유사도:")
+      for score, doc in combine_dense_docs:
+          title, date, text, url = doc
+          print(f"제목: {title}\n유사도: {score} {url}")
+          print('---------------------------------')
 
 
       #################################################3#################################################3
@@ -636,10 +637,10 @@ def best_docs(user_question):
 
 
 
-      # print("\n\n\n\n필터링 전 최종문서 (유사도 큰 순):")
-      # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(final_best_docs):
-      #     print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor},본문 {len(tex)} 날짜: {dat}, URL: {ur}")
-      #     print("-" * 50)
+      print("\n\n\n\n필터링 전 최종문서 (유사도 큰 순):")
+      for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(final_best_docs):
+          print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor},본문 {len(tex)} 날짜: {dat}, URL: {ur}")
+          print("-" * 50)
 
 
 
@@ -654,13 +655,22 @@ def best_docs(user_question):
                   score -= 0.1  # 유사도 점수를 0.1 낮추기
               if '대학원' not in query_noun and '대학원생' not in query_noun and ('대학원' in title or '대학원생' in title):
                   score-=1
+              if any(keyword in query_noun for keyword in ['대학원','대학원생']) and any (keyword in title for keyword in ['대학원','대학원생']):
+                  score+=1
+              if any (keyword in query_noun for keyword in ['직원','교수','선생','선생님']) and date== "작성일24-01-01 00:00":
+                  score+=1.1
               # 조정된 유사도 점수를 사용하여 다시 리스트에 저장
               Final_best[idx] = (score, title, date, text,  url, image)
               #print(Final_best[idx])
           return Final_best
 
       final_best_docs=last_filter_keyword(final_best_docs,query_noun)
-
+      final_best_docs.sort(key=lambda x: x[0], reverse=True)
+      
+      print("\n\n\n\n중간필터 최종문서 (유사도 큰 순):")
+      for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(final_best_docs):
+          print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor},본문 {len(tex)} 날짜: {dat}, URL: {ur}")
+          print("-" * 50)
 
       def cluster_documents_by_similarity(docs, threshold=0.89):
           clusters = []
@@ -687,9 +697,7 @@ def best_docs(user_question):
 
           return clusters
 
-
-
-      # Step 1: Adjust similarity scores based on the presence of query_noun
+ # Step 1: Adjust similarity scores based on the presence of query_noun
 
 
       # Step 2: Cluster documents by similarity
@@ -704,33 +712,75 @@ def best_docs(user_question):
       # Step 3: Compare cluster[0] cluster[1] top similarity and check condition
       top_0_cluster_similar=clusters[0][0][0]
       top_1_cluster_similar=clusters[1][0][0]
+      keywords = ["최근", "최신", "현재", "지금"]
       #print(f"{top_0_cluster_similar} {top_1_cluster_similar}")
-      if (top_0_cluster_similar-top_1_cluster_similar<=0.38): ## 질문이 모호했다는 의미일 수 있음.. (예를 들면 수강신청 언제야? 인데 구체적으로 1학기인지, 2학기인지, 겨울, 여름인지 모르게..)
-            # 날짜를 비교해 더 최근 날짜를 가진 클러스터 선택
-          date1 = parse_date(clusters[0][0][2])
-          date2 = parse_date(clusters[1][0][2])
-          if date1<date2:
-            result_docs=clusters[1]
+      if (top_0_cluster_similar-top_1_cluster_similar<=0.3): ## 질문이 모호했다는 의미일 수 있음.. (예를 들면 수강신청 언제야? 인데 구체적으로 1학기인지, 2학기인지, 겨울, 여름인지 모르게..)
+          # 날짜를 비교해 더 최근 날짜를 가진 클러스터 선택
+          #조금더 세밀하게 들어가자면?
+          print("세밀하게..")
+          if (any(keyword in word for word in query_nouns for keyword in keywords) or top_0_cluster_similar-clusters[len(clusters)-1][0][0]<=0.3):
+            print("최근이거나 뽑은 문서들이 유사도 0.3이내")
+            if (top_0_cluster_similar-clusters[len(clusters)-1][0][0]<=0.3):
+              print("최근이면서 뽑은 문서들이 유사도 0.3이내 real")
+              sorted_cluster=sorted(clusters, key=lambda doc: doc[0][2], reverse=True)
+              sorted_cluster=sorted_cluster[0]
+            else:
+              print("최근이면서 뽑은 문서들이 유사도 0.3이상")
+              if (top_0_cluster_similar-top_1_cluster_similar<=0.3):
+                print("최근이면서 뽑은 문서들이 유사도 0.3이상이라서 두 문서로 줄임")
+                date1 = parse_date(clusters[0][0][2])
+                date2 = parse_date(clusters[1][0][2])
+                if date1<date2:
+                  result_docs=clusters[1]
+                else:
+                  result_docs=clusters[0]
+                sorted_cluster = sorted(result_docs, key=lambda doc: doc[2], reverse=True)
+
+              else:
+                sorted_cluster=sorted(clusters, key=lambda doc: doc[0][0], reverse=True)
+                sorted_cluster=sorted_cluster[0]
           else:
-            result_docs=clusters[0]
-          sorted_cluster = sorted(result_docs, key=lambda doc: doc[2], reverse=True)
+            print("두 클러스터 유사도")
+            date1 = parse_date(clusters[0][0][2])
+            date2 = parse_date(clusters[1][0][2])
+            if date1<date2:
+              result_docs=clusters[1]
+            else:
+              result_docs=clusters[0]
+            sorted_cluster = sorted(result_docs, key=lambda doc: doc[2], reverse=True)
       else: #질문이 모호하지 않을 가능성 업업
           number_pattern = r"\d"
-          keywords = ["최근", "최신", "현재", "지금"]
           if (any(keyword in word for word in query_nouns for keyword in keywords) or not any(re.search(number_pattern, word) for word in query_nouns)):
+              print("최근 최신이라는 말 드감")
               result_docs=clusters[0]
               sorted_cluster = sorted(result_docs, key=lambda doc: doc[2], reverse=True)
           else:
+            print("진짜 유사도순대로")
             result_docs=clusters[0]
             sorted_clusted=last_filter_keyword(result_docs,query_nouns)
             sorted_cluster = sorted(clusters[0], key=lambda doc: doc[0], reverse=True)
+      # sorted_cluster가 리스트가 아닌 경우에만 리스트로 변환
+      #print(sorted_cluster)
 
-      # print("\n\n\n\n최종 상위 문서 (유사도 및 날짜 기준 정렬):")
-      # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(sorted_cluster):
-      #     print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor}, 날짜: {dat}, URL: {ur} 내용: {len(tex)}   이미지{len(image_ur)}")
-      #     print("-" * 50)
-      # print("\n\n\n")
+      top_doc = list(sorted_cluster[0]) # 첫 번째 문서를 완전히 리스트로 변환
+      same_doc=0
+      for i, tit in enumerate(titles):
+          if top_doc[1] == tit:
+              if top_doc[3]!=texts[i]:
+                #print(f"성공? {i}")
+                top_doc[3]+=(texts[i])
+                same_doc+=0.3
+      top_doc[0]+=same_doc
+      if len(sorted_cluster)>1:
+        top_doc[0] += 0.5  # 유사도를 10% 높임
+        sorted_cluster[0] = tuple(top_doc)  # 다시 tuple로 변환하여 저장
 
+
+      print("\n\n\n\n최종 상위 문서 (유사도 및 날짜 기준 정렬):")
+      for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(sorted_cluster):
+          print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor}, 날짜: {dat}, URL: {ur} 내용: {len(tex)}   이미지{len(image_ur)}")
+          print("-" * 50)
+      print("\n\n\n")
       return [sorted_cluster[0]]
 
 prompt_template = """당신은 경북대학교 컴퓨터학부 공지사항을 전달하는 직원이고, 사용자의 질문에 대해 올바른 공지사항의 내용을 참조하여 정확하게 전달해야 할 의무가 있습니다.
