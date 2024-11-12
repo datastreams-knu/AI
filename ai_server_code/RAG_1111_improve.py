@@ -792,7 +792,6 @@ def get_ai_message(question):
         existing_answer = qa_chain.invoke(question)# 초기 답변 생성 및 문자열로 할당
         answer_result=existing_answer
         display(HTML(image_display))
-        
         # 상위 3개의 참조한 문서의 URL 포함 형식으로 반환
         doc_references = "\n".join([
             f"\n참고 문서 URL: {doc.metadata['url']}"

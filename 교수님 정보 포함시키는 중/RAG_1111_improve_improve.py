@@ -903,5 +903,15 @@ def get_ai_message(question):
             f"\n참고 문서 URL: {doc.metadata['url']}"
             for doc in relevant_docs[:1] if doc.metadata.get('url') != 'No URL'
         ])
-        # AI의 최종 답변과 참조 URL을 함께 반환
-        return f"{answer_result}\n\n------------------------------------------------\n항상 정확한 답변을 제공하지 못할 수 있습니다.\n아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.\n{doc_references}"
+        # JSON 형식으로 반환
+        import json
+        data = {
+        "answer": answer_result,
+        "references": doc_references,
+        "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요."
+        }
+        
+        # JSON 직렬화
+        json_response = json.dumps(data, ensure_ascii=False)
+
+        return json_response

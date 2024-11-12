@@ -34,7 +34,7 @@ from konlpy.tag import Okt
 from difflib import SequenceMatcher
 # Pinecone API 키와 인덱스 이름 선언
 pinecone_api_key = 'cd22a6ee-0b74-4e9d-af1b-a1e83917d39e'  # 여기에 Pinecone API 키를 입력
-index_name = 'prof'
+index_name = 'proftest'
 
 # Upstage API 키 선언
 upstage_api_key = 'up_pGRnryI1JnrxChGycZmswEZm934Tf'  # 여기에 Upstage API 키를 입력
@@ -68,7 +68,9 @@ def extract_text_and_date_from_url(urls):
             paragraphs = soup.find('div', id='bo_v_con')
             if paragraphs:
                 # 텍스트 추출
-                text_content = "\n".join([para.get_text(strip=True) for para in paragraphs.find_all('p')])
+                text_content = "\n".join([element.get_text(strip=True) for element in paragraphs.find_all(['p', 'div', 'li'])])
+                if text_content.strip() == "":
+                    text_content = ""
 
                 # 이미지 URL 추출
                 for img in paragraphs.find_all('img'):
@@ -142,6 +144,103 @@ def extract_professor_info_from_urls(urls):
 
     return all_data
 
+def extract_professor_info_from_urls_2(urls):
+    all_data = []
+
+    def fetch_professor_info(url):
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # 교수 정보가 담긴 요소들 선택
+            professor_elements = soup.find("div", id="Student").find_all("li")
+
+            for professor in professor_elements:
+                # 이미지 URL 추출
+                image_element = professor.find("div", class_="img").find("img")
+                image_content = image_element["src"] if image_element else "Unknown Image URL"
+
+                # 이름 추출
+                name_element = professor.find("div", class_="cnt").find("div", class_="name")
+                title = name_element.get_text(strip=True) if name_element else "Unknown Name"
+
+                # 연락처와 이메일 추출
+                contact_place = professor.find("div", class_="dep").get_text(strip=True) if professor.find("div", class_="dep") else "Unknown Contact Place"
+                email_element = professor.find("dl", class_="email").find("dd").find("a")
+                email = email_element.get_text(strip=True) if email_element else "Unknown Email"
+
+                # 텍스트 내용 조합
+                text_content = f"성함(이름):{title}, 연구실(장소):{contact_place}, 이메일:{email}"
+
+                # 날짜와 URL 설정
+                date = "작성일24-01-01 00:00"
+                prof_url = url
+
+                # 각 교수의 정보를 all_data에 추가
+                all_data.append((title, text_content, image_content, date, prof_url))
+
+        except Exception as e:
+            print(f"Error processing {url}: {e}")
+
+    # ThreadPoolExecutor를 이용하여 병렬 크롤링
+    with ThreadPoolExecutor() as executor:
+        executor.map(fetch_professor_info, urls)
+
+    return all_data
+
+def extract_professor_info_from_urls_3(urls):
+    all_data = []
+
+    def fetch_professor_info(url):
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # 교수 정보가 담긴 요소들 선택
+            professor_elements = soup.find("div", id="Student").find_all("li")
+
+            for professor in professor_elements:
+                # 이미지 URL 추출
+                image_element = professor.find("div", class_="img").find("img")
+                image_content = image_element["src"] if image_element else "Unknown Image URL"
+
+                # 이름 추출
+                name_element = professor.find("div", class_="cnt").find("h1")
+                title = name_element.get_text(strip=True) if name_element else "Unknown Name"
+
+                # 연락처 추출
+                contact_number_element = professor.find("span", class_="period")
+                contact_number = contact_number_element.get_text(strip=True) if contact_number_element else "Unknown Contact Number"
+
+                # 연구실 위치 추출
+                contact_info = professor.find_all("dl", class_="dep")
+                contact_place = contact_info[0].find("dd").get_text(strip=True) if len(contact_info) > 0 else "Unknown Contact Place"
+
+                # 이메일 추출
+                email = contact_info[1].find("dd").find("a").get_text(strip=True) if len(contact_info) > 1 else "Unknown Email"
+                
+                # 담당 업무 추출
+                role = contact_info[2].find("dd").get_text(strip=True) if len(contact_info) > 2 else "Unknown Role"
+
+                # 텍스트 내용 조합
+                text_content = f"성함(이름):{title}, 연락처(전화번호):{contact_number}, 사무실(장소):{contact_place}, 이메일:{email}, 담당업무:{role}"
+
+                # 날짜와 URL 설정
+                date = "작성일24-01-01 00:00"
+                prof_url = url
+
+                # 각 교수의 정보를 all_data에 추가
+                all_data.append((title, text_content, image_content, date, prof_url))
+
+        except Exception as e:
+            print(f"Error processing {url}: {e}")
+
+    # ThreadPoolExecutor를 이용하여 병렬 크롤링
+    with ThreadPoolExecutor() as executor:
+        executor.map(fetch_professor_info, urls)
+
+    return all_data
+
 
 # 최신 wr_id 추출 함수
 def get_latest_wr_id():
@@ -165,9 +264,21 @@ urls2 = [
     "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&lang=kor",
 ]
 
+urls3 = [
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor",
+]
+
+urls4 = [
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5&lang=kor",
+]
+
 # URL에서 문서와 날짜 추출
 document_data = extract_text_and_date_from_url(urls)
 prof_data = extract_professor_info_from_urls(urls2)
+prof_data_2 = extract_professor_info_from_urls_2(urls3)
+prof_data_3 = extract_professor_info_from_urls_3(urls4)
+
+combined_prof_data = prof_data + prof_data_2 + prof_data_3
 
 # 텍스트 분리기 초기화
 class CharacterTextSplitter:
@@ -226,7 +337,7 @@ professor_doc_urls = []
 professor_doc_dates = []
 
 # prof_data는 extract_professor_info_from_urls 함수의 반환값
-for title, doc, image, date, url in prof_data:
+for title, doc, image, date, url in combined_prof_data :
     if isinstance(doc, str) and doc.strip():  # 교수 정보가 문자열로 있고 비어있지 않을 때
         split_texts = text_splitter.split_text(doc)
         professor_texts.extend(split_texts)
@@ -377,6 +488,7 @@ for i, embedding in enumerate(dense_doc_vectors):
 
 
 
+
 def best_docs(user_question):
       # 사용자 질문
       okt = Okt()
@@ -432,12 +544,12 @@ def best_docs(user_question):
       top_20_titles_idx = np.argsort(title_question_similarities)[-20:][::-1]
 
        # 결과 출력
-      # print("최종 정렬된 BM25 문서:")
-      # for idx in top_20_titles_idx:  # top_20_titles_idx에서 각 인덱스를 가져옴
-      #     print(f"  제목: {titles[idx]}")
-      #     print(f"  유사도: {title_question_similarities[idx]}")
-      #     print(f" URL: {doc_urls[idx]}")
-      #     print("-" * 50)
+      print("최종 정렬된 BM25 문서:")
+      for idx in top_20_titles_idx:  # top_20_titles_idx에서 각 인덱스를 가져옴
+          print(f"  제목: {titles[idx]}")
+          print(f"  유사도: {title_question_similarities[idx]}")
+          print(f" URL: {doc_urls[idx]}")
+          print("-" * 50)
 
       Bm25_best_docs = [(titles[i], doc_dates[i], texts[i], doc_urls[i],image_url[i]) for i in top_20_titles_idx]
 
@@ -543,14 +655,23 @@ def best_docs(user_question):
                   score -= 0.1  # 유사도 점수를 0.1 낮추기
               if '대학원' not in query_noun and '대학원생' not in query_noun and ('대학원' in title or '대학원생' in title):
                   score-=1
+              if any(keyword in query_noun for keyword in ['대학원','대학원생']) and any (keyword in title for keyword in ['대학원','대학원생']):
+                  score+=1
+              if any (keyword in query_noun for keyword in ['직원','교수','선생','선생님']) and date== "작성일24-01-01 00:00":
+                  score+=1.1
               # 조정된 유사도 점수를 사용하여 다시 리스트에 저장
               Final_best[idx] = (score, title, date, text,  url, image)
               #print(Final_best[idx])
           return Final_best
 
       final_best_docs=last_filter_keyword(final_best_docs,query_noun)
+      final_best_docs.sort(key=lambda x: x[0], reverse=True)
       
-      
+      print("\n\n\n\n중간필터 최종문서 (유사도 큰 순):")
+      for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(final_best_docs):
+          print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor},본문 {len(tex)} 날짜: {dat}, URL: {ur}")
+          print("-" * 50)
+
       def cluster_documents_by_similarity(docs, threshold=0.89):
           clusters = []
 
@@ -576,9 +697,7 @@ def best_docs(user_question):
 
           return clusters
 
-
-
-      # Step 1: Adjust similarity scores based on the presence of query_noun
+ # Step 1: Adjust similarity scores based on the presence of query_noun
 
 
       # Step 2: Cluster documents by similarity
@@ -593,60 +712,76 @@ def best_docs(user_question):
       # Step 3: Compare cluster[0] cluster[1] top similarity and check condition
       top_0_cluster_similar=clusters[0][0][0]
       top_1_cluster_similar=clusters[1][0][0]
+      keywords = ["최근", "최신", "현재", "지금"]
       #print(f"{top_0_cluster_similar} {top_1_cluster_similar}")
-      if (top_0_cluster_similar-top_1_cluster_similar<=0.38): ## 질문이 모호했다는 의미일 수 있음.. (예를 들면 수강신청 언제야? 인데 구체적으로 1학기인지, 2학기인지, 겨울, 여름인지 모르게..)
-            # 날짜를 비교해 더 최근 날짜를 가진 클러스터 선택
-          date1 = parse_date(clusters[0][0][2])
-          date2 = parse_date(clusters[1][0][2])
-          if date1<date2:
-            result_docs=clusters[1]
+      if (top_0_cluster_similar-top_1_cluster_similar<=0.3): ## 질문이 모호했다는 의미일 수 있음.. (예를 들면 수강신청 언제야? 인데 구체적으로 1학기인지, 2학기인지, 겨울, 여름인지 모르게..)
+          # 날짜를 비교해 더 최근 날짜를 가진 클러스터 선택
+          #조금더 세밀하게 들어가자면?
+          print("세밀하게..")
+          if (any(keyword in word for word in query_nouns for keyword in keywords) or top_0_cluster_similar-clusters[len(clusters)-1][0][0]<=0.3):
+            print("최근이거나 뽑은 문서들이 유사도 0.3이내")
+            if (top_0_cluster_similar-clusters[len(clusters)-1][0][0]<=0.3):
+              print("최근이면서 뽑은 문서들이 유사도 0.3이내 real")
+              sorted_cluster=sorted(clusters, key=lambda doc: doc[0][2], reverse=True)
+              sorted_cluster=sorted_cluster[0]
+            else:
+              print("최근이면서 뽑은 문서들이 유사도 0.3이상")
+              if (top_0_cluster_similar-top_1_cluster_similar<=0.3):
+                print("최근이면서 뽑은 문서들이 유사도 0.3이상이라서 두 문서로 줄임")
+                date1 = parse_date(clusters[0][0][2])
+                date2 = parse_date(clusters[1][0][2])
+                if date1<date2:
+                  result_docs=clusters[1]
+                else:
+                  result_docs=clusters[0]
+                sorted_cluster = sorted(result_docs, key=lambda doc: doc[2], reverse=True)
+
+              else:
+                sorted_cluster=sorted(clusters, key=lambda doc: doc[0][0], reverse=True)
+                sorted_cluster=sorted_cluster[0]
           else:
-            result_docs=clusters[0]
-          sorted_cluster = sorted(result_docs, key=lambda doc: doc[2], reverse=True)
+            print("두 클러스터 유사도")
+            date1 = parse_date(clusters[0][0][2])
+            date2 = parse_date(clusters[1][0][2])
+            if date1<date2:
+              result_docs=clusters[1]
+            else:
+              result_docs=clusters[0]
+            sorted_cluster = sorted(result_docs, key=lambda doc: doc[2], reverse=True)
       else: #질문이 모호하지 않을 가능성 업업
           number_pattern = r"\d"
-          keywords = ["최근", "최신", "현재", "지금"]
           if (any(keyword in word for word in query_nouns for keyword in keywords) or not any(re.search(number_pattern, word) for word in query_nouns)):
+              print("최근 최신이라는 말 드감")
               result_docs=clusters[0]
               sorted_cluster = sorted(result_docs, key=lambda doc: doc[2], reverse=True)
           else:
+            print("진짜 유사도순대로")
             result_docs=clusters[0]
             sorted_clusted=last_filter_keyword(result_docs,query_nouns)
             sorted_cluster = sorted(clusters[0], key=lambda doc: doc[0], reverse=True)
+      # sorted_cluster가 리스트가 아닌 경우에만 리스트로 변환
+      #print(sorted_cluster)
 
+      top_doc = list(sorted_cluster[0]) # 첫 번째 문서를 완전히 리스트로 변환
+      same_doc=0
+      for i, tit in enumerate(titles):
+          if top_doc[1] == tit:
+              if top_doc[3]!=texts[i]:
+                #print(f"성공? {i}")
+                top_doc[3]+=(texts[i])
+                same_doc+=0.3
+      top_doc[0]+=same_doc
+      if len(sorted_cluster)>1:
+        top_doc[0] += 0.5  # 유사도를 10% 높임
+        sorted_cluster[0] = tuple(top_doc)  # 다시 tuple로 변환하여 저장
+
+
+      print("\n\n\n\n최종 상위 문서 (유사도 및 날짜 기준 정렬):")
+      for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(sorted_cluster):
+          print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor}, 날짜: {dat}, URL: {ur} 내용: {len(tex)}   이미지{len(image_ur)}")
+          print("-" * 50)
+      print("\n\n\n")
       return [sorted_cluster[0]]
-      '''
-      final_best_docs=sorted_cluster
-      # Step 4: 결과 출력
-      # print("\n\n\n\n최종 상위 문서 (유사도 및 날짜 기준 정렬):")
-      # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(sorted_cluster):
-      #     print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor}, 날짜: {dat}, URL: {ur}")
-      #     print("-" * 50)
-
-      top_title =  final_best_docs[0][1]  # 최상위 문서의 제목 가져오기
-      top_score = final_best_docs[0][0]
-      # 기준 제목을 제외한 제목들을 추출
-      candidate_titles = [doc[1] for doc in final_best_docs[1:]]
-      # 제목 간 유사도 계산
-      vectorizer = TfidfVectorizer().fit_transform([top_title] + candidate_titles)
-      similarity_matrix = cosine_similarity(vectorizer)
-      title_similarities = similarity_matrix[0][1:]  # 첫 번째 제목과의 유사도 리스트
-      # 일정 유사도(threshold) 이상인 문서의 유사도 값을 합산
-      threshold = 0.6
-      adjusted_score = top_score  # 초기 상위 문서의 유사도 값
-      # 첫 번째 문서의 유사도를 조정된 값으로 업데이트
-      final_best_docs[0] = (adjusted_score, *final_best_docs[0][1:])
-      # Step 3: 최상위 문서와 동일한 제목을 가진 문서 필터링 및 개수 카운트
-      result_docs = [doc for doc in final_best_docs if doc[1] == top_title]
-      top_title_count = len(result_docs)
-      # Step 4: 결과 출력
-      # print("\n\n\n\n최종 상위 문서 (유사도 및 날짜 기준 정렬):")
-      # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(result_docs):
-      #     print(f"순위 {idx+1}: 제목: {titl[:10]}, 유사도: {scor}, 날짜: {dat}, URL: {ur}")
-      #     print("-" * 50)
-      return result_docs[:top_title_count]
-      '''
-
 
 prompt_template = """당신은 경북대학교 컴퓨터학부 공지사항을 전달하는 직원이고, 사용자의 질문에 대해 올바른 공지사항의 내용을 참조하여 정확하게 전달해야 할 의무가 있습니다.
 현재 한국 시간: {current_time}
@@ -661,7 +796,11 @@ prompt_template = """당신은 경북대학교 컴퓨터학부 공지사항을 �
 
 1. 질문의 내용이 이벤트의 기간에 대한 것일 경우, 문서에 주어진 기한과 현재 한국 시간을 비교하여 해당 이벤트가 예정된 것인지, 진행 중인지, 또는 이미 종료되었는지에 대한 정보를 알려주세요.
   예를 들어, "2학기 수강신청 일정은 언제야?"라는 질문을 받았을 경우, 현재 시간은 11월이라고 가정하면 수강신청은 기간은 8월이었으므로 이미 종료된 이벤트입니다.
-  따라서, "2학기 수강신청은 이미 종료되었습니다."라는 문구를 추가로 사용자에게 제공해주고, 2학기 수강신청 일정에 대한 정보를 사용자에게 제공해주어야 합니다.
+  따라서, "2학기 수강신청은 이미 종료되었습니다."와 같은 문구를 추가로 사용자에게 제공해주고, 2학기 수강신청 일정에 대한 정보를 사용자에게 제공해주어야 합니다.
+  또 다른 예시로 현재 시간이 11월 12일이라고 가정하였을 때, "겨울 계절 신청기간은 언제야?"라는 질문을 받았고, 겨울 계절 신청기간이 11월 13일이라면 아직 시작되지 않은 이벤트입니다.
+  따라서, "겨울 계절 신청은 아직 시작 전입니다."와 같은 문구를 추가로 사용자에게 제공해주고, 겨울 계절 신청 일정에 대한 정보를 사용자에게 제공해주어야 합니다.
+  또 다른 예시로 현재 시간이 11월 13일이라고 가정하였을 때, "겨울 계절 신청기간은 언제야?"라는 질문을 받았고, 겨울 계절 신청기간이 11월 13일이라면 현재 진행 중인 이벤트입니다.
+  따라서, "현재 겨울 계절 신청기간입니다."와 같은 문구를 추가로 사용자에게 제공해주고, 겨울 계절 신청 일정에 대한 정보를 사용자에게 제공해주어야 합니다.
 2. 질문에서 핵심적인 키워드들을 골라 키워드들과 관련된 문서를 찾아서 해당 문서를 읽고 정확한 내용을 답변해주세요.
 3. 질문에 포함된 핵심적인 키워드와 관련된 내용의 문서가 여러 개가 있을 경우, 질문의 내용에 구체적인 기간에 대한 정보가 없다면 (ex. 2024년 1학기, 2차 등) 가장 최근의 문서에 대한 정보를 우선적으로 제공하세요.
   예를 들어, Tutor 모집글이 1~7차까지 존재한다고 가정하였을 때, 질문 내에 구체적으로 3차 모집에 대한 정보를 물었다면 Tutor 3차 모집에 대한 문서를 제공해야 합니다.
@@ -676,7 +815,6 @@ prompt_template = """당신은 경북대학교 컴퓨터학부 공지사항을 �
 7. 답변은 친절하게 존댓말로 제공하세요.
 
 답변:"""
-
 
 # PromptTemplate 객체 생성
 PROMPT = PromptTemplate(
@@ -730,7 +868,9 @@ def get_answer_from_chain(best_docs, user_question):
 def get_ai_message(question):
     top_doc = best_docs(question)  # 가장 유사한 문서 가져오기
     top_docs = [list(doc) for doc in top_doc]
-    #print(f"\ntitles: {top_docs[0][1]} similarity: {top_docs[0][0]}, text:{(len(top_docs[0][3]))} doc_dates: {top_docs[0][2]} URL: {top_docs[0][4]}")
+    # print(f"\ntitles: {top_docs[0][1]} similarity: {top_docs[0][0]}, text:{(len(top_docs[0][3]))} doc_dates: {top_docs[0][2]} URL: {top_docs[0][4]}")
+    if (top_docs[0][2] == "작성일24-01-01 00:00") :
+      top_docs[0][0] += 1
     ### top_docs에 이미지 URL이 들어있다면?
     if len(top_docs[0])==6 and top_docs[0][5]!="No content" and top_docs[0][3]=="No content" and top_docs[0][0]>1.8:
            # image_display 초기화 및 여러 이미지 처리
@@ -792,20 +932,19 @@ def get_ai_message(question):
         existing_answer = qa_chain.invoke(question)# 초기 답변 생성 및 문자열로 할당
         answer_result=existing_answer
         display(HTML(image_display))
-        
         # 상위 3개의 참조한 문서의 URL 포함 형식으로 반환
         doc_references = "\n".join([
             f"\n참고 문서 URL: {doc.metadata['url']}"
             for doc in relevant_docs[:1] if doc.metadata.get('url') != 'No URL'
         ])
-        # JSON 형식으로 반환
+        # AI의 최종 답변과 참조 URL을 함께 반환
+        # return f"{answer_result}\n\n------------------------------------------------\n항상 정확한 답변을 제공하지 못할 수 있습니다.\n아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.\n{doc_references}"
+
+        # dictionary으로 반환.
         data = {
-        "answer": answer_result,
-        "references": doc_references,
-        "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요."
+          "answer": answer_result,
+          "references": doc_references,
+          "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요."
         }
 
-        # JSON 직렬화
-        json_response = json.dumps(data, ensure_ascii=False)
-
-        return json_response
+        return data
