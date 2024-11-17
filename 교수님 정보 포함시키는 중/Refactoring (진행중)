@@ -1,0 +1,325 @@
+import requests
+import numpy as np
+import re
+import pytz
+from bs4 import BeautifulSoup
+from langchain_upstage import UpstageEmbeddings
+from concurrent.futures import ThreadPoolExecutor
+from pinecone import Pinecone
+from langchain_upstage import ChatUpstage
+from langchain.prompts import PromptTemplate
+from langchain.schema.runnable import RunnablePassthrough
+from langchain.schema.output_parser import StrOutputParser
+from langchain.schema import Document
+from langchain.vectorstores import FAISS
+from datetime import datetime
+from konlpy.tag import Okt
+from IPython.display import display, HTML
+from rank_bm25 import BM25Okapi
+from difflib import SequenceMatcher
+
+
+# Pinecone API 키와 인덱스 이름 선언
+pinecone_api_key = 'cd22a6ee-0b74-4e9d-af1b-a1e83917d39e'
+index_name = 'db1'
+
+# Upstage API 키 선언
+upstage_api_key = 'up_pGRnryI1JnrxChGycZmswEZm934Tf'
+
+# Pinecone API 설정 및 초기화
+pc = Pinecone(api_key=pinecone_api_key)
+index = pc.Index(index_name)
+
+
+# 현재 한국 시간 가져오는 함수
+def get_korean_time():
+    return datetime.now(pytz.timezone('Asia/Seoul'))
+
+# 텍스트 분리기 초기화
+# 매개변수 : 문서 / 리턴값 : 1100 사이즈로 자른 문서 chunk들을 저장한 배열
+class CharacterTextSplitter:
+    def __init__(self, chunk_size=1100, chunk_overlap=150):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+
+    def split_text(self, text):
+        chunks = []
+        for i in range(0, len(text), self.chunk_size - self.chunk_overlap):
+            chunks.append(text[i:i + self.chunk_size])
+        return chunks
+
+text_splitter = CharacterTextSplitter(chunk_size=1100, chunk_overlap=150)
+
+# 가장 최근 wr_id를 찾는 함수
+# 매개변수 : 없음 / 리턴값 : 가장 최근 wr_id
+def get_latest_wr_id():
+    url = "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1" # 공지사항 URL
+    response = requests.get(url)
+    if response.status_code == 200:
+        match = re.search(r'wr_id=(\d+)', response.text)
+        if match:
+            return int(match.group(1))  # 가장 최근의 id를 return
+    return None
+
+
+##################################################################################################################
+#                                        공지사항 크롤링 관련 코드                                                 #
+##################################################################################################################
+
+# 공지사항 URL에서 제목, 내용, 이미지, 날짜, URL을 리턴하는 함수
+# 매개변수 : URL들을 저장한 배열 / 리턴값 : URL들에 대한 각각의 제목, 내용, 이미지, 날짜, URL을 튜플로 저장한 배열 
+def extract_text_and_date_from_url(urls):
+    all_data = []
+
+    # 해당 URL 페이지의 태그를 살피는 함수
+    # 매개변수 : URL / 리턴값 : 각 URL의 제목, 내용, 이미지, 날짜, URL 정보
+    def fetch_text_and_date(url):
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            # 제목 추출
+            title_element = soup.find('span', class_='bo_v_tit')
+            title = title_element.get_text(strip=True) if title_element else "Unknown Title"
+
+            text_content = "Unknown Content"
+            image_content = []
+
+            paragraphs = soup.find('div', id='bo_v_con')
+            if paragraphs:
+                # 내용 추출
+                text_content = "\n".join([element.get_text(strip=True) for element in paragraphs.find_all(['p', 'div', 'li'])])
+                if text_content.strip() == "":
+                    text_content = ""
+                # 이미지 URL 추출
+                for img in paragraphs.find_all('img'):
+                    img_src = img.get('src')
+                    if img_src:
+                        image_content.append(img_src)
+
+            # 날짜 추출
+            date_element = soup.select_one("strong.if_date")
+            date = date_element.get_text(strip=True) if date_element else "Unknown Date"
+
+            if title != "Unknown Title":
+                return title, text_content, image_content, date, url
+            else:
+                return None, None, None, None, None  # 제목이 Unknown일 경우 None 반환
+        except Exception as e:
+            print(f"Error processing {url}: {e}")
+            return None, None, None, None, url
+
+    # 병렬 처리를 통해 여러 URL을 동시적으로 수행할 수 있도록 해주는 코드
+    with ThreadPoolExecutor() as executor:
+        results = executor.map(fetch_text_and_date, urls) # map을 통해 urls 배열에 존재하는 모든 url에 대해 fetch_text_and_date 함수를 적용시켜 실행
+
+    all_data = [(title, text_content, image_content, date, url) for title, text_content, image_content, date, url in results if title is not None]
+    return all_data
+
+now_number = get_latest_wr_id()
+urls = []   # 공지사항 URL 저장하는 리스트
+for number in range(now_number, 27726, -1):     # 27726 : 24-01-01 공지사항
+    urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
+
+document_data = extract_text_and_date_from_url(urls)
+
+titles = []
+texts = []
+image_url=[]
+doc_dates = []
+doc_urls = []
+
+for title, doc, image, date, url in document_data:
+    if isinstance(doc, str) and doc.strip():  # 문서에 문자열 형식의 내용이 있는 경우,
+        split_texts = text_splitter.split_text(doc)
+        texts.extend(split_texts)
+        titles.extend([title] * len(split_texts))   # 같은 제목, url, 작성날짜를 가진 문서가 여러 개의 chunks로 쪼개어졌을 경우,
+        doc_urls.extend([url] * len(split_texts))   # 각 chunks들이 같은 문서에서 추출되었음을 더 쉽게 판별할 수 있도록
+        doc_dates.extend([date] * len(split_texts)) # split_texts의 크기만큼 추가하였음
+
+        if image:  # 이미지가 있다면,
+            image_url.extend([image] * len(split_texts))  # 동일한 방법으로 이미지 URL 저장
+        else:
+            image_url.extend(["No content"] * len(split_texts))  # 이미지에 "No content" 추가
+
+    elif image:  # 문서에 내용은 없고 이미지만 있는 경우,
+        titles.append(title)
+        texts.append("No content")  # "No content" 추가
+        image_url.append(image)
+        doc_dates.append(date)
+        doc_urls.append(url)        
+
+    else:  # 문서에 내용과 이미지 모두 없는 경우,
+        titles.append(title)
+        texts.append("No content")
+        image_url.append("No content")
+        doc_dates.append(date)
+        doc_urls.append(url)
+
+##################################################################################################################
+#                                          교수진 크롤링 관련 코드                                                 #
+##################################################################################################################
+
+# 정교수 URL에서 제목, 내용, 이미지, 날짜, URL을 리턴하는 함수
+# 매개변수 : URL들을 저장한 배열 / 리턴값 : URL들에 대한 각각의 제목, 내용, 이미지, 날짜, URL을 튜플로 저장한 배열 
+def extract_professor_info_from_urls(urls):   # 정교수용
+    all_data = []
+
+    # 해당 URL 페이지의 태그를 살피는 함수
+    # 매개변수 : URL / 리턴값 : 각 URL의 제목, 내용, 이미지, 날짜, URL 정보
+    def fetch_professor_info(url):
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # 교수 정보가 담긴 요소들 선택
+            professor_elements = soup.find("div", id="dr").find_all("li")
+
+            for professor in professor_elements:
+
+                # 제목 추출 (교수님 성함을 제목으로 지정)
+                name_element = professor.find("div", class_="dr_txt").find("h3")
+                title = name_element.get_text(strip=True) if name_element else "Unknown Name"
+
+                # 내용 추출 (교수님 성함, 교수님의 연구실 번호, 이메일을 내용으로 추가)
+                contact_info = professor.find("div", class_="dr_txt").find_all("dd")
+                contact_number = contact_info[0].get_text(strip=True) if len(contact_info) > 0 else "Unknown Contact Number"
+                email = contact_info[1].get_text(strip=True) if len(contact_info) > 1 else "Unknown Email"
+                text_content = f"{title}, {contact_number}, {email}"
+
+                # 이미지 URL 추출
+                image_element = professor.find("div", class_="dr_img").find("img")
+                image_content = image_element["src"] if image_element else "Unknown Image URL"
+
+                # 날짜 추출
+                date = "작성일24-01-01 00:00"
+
+                # 교수님 세부정보 URL 추출
+                prof_url_element = professor.find("a")
+                prof_url = prof_url_element["href"] if prof_url_element else "Unknown URL"
+
+                all_data.append((title, text_content, image_content, date, prof_url))
+
+        except Exception as e:
+            print(f"Error processing {url}: {e}")
+
+    with ThreadPoolExecutor() as executor:
+        results = executor.map(fetch_professor_info, urls)
+
+    return all_data
+
+# 초빙교수 URL에서 제목, 내용, 이미지, 날짜, URL을 리턴하는 함수
+# 매개변수 : URL들을 저장한 배열 / 리턴값 : URL들에 대한 각각의 제목, 내용, 이미지, 날짜, URL을 튜플로 저장한 배열 
+def extract_professor_info_from_urls_2(urls):   # 초빙교수용
+    all_data = []
+
+    def fetch_professor_info(url):
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # 교수 정보가 담긴 요소들 선택
+            professor_elements = soup.find("div", id="Student").find_all("li")
+
+            for professor in professor_elements:
+                # 이미지 URL 추출
+                image_element = professor.find("div", class_="img").find("img")
+                image_content = image_element["src"] if image_element else "Unknown Image URL"
+
+                # 이름 추출
+                name_element = professor.find("div", class_="cnt").find("div", class_="name")
+                title = name_element.get_text(strip=True) if name_element else "Unknown Name"
+
+                # 연락처와 이메일 추출
+                contact_place = professor.find("div", class_="dep").get_text(strip=True) if professor.find("div", class_="dep") else "Unknown Contact Place"
+                email_element = professor.find("dl", class_="email").find("dd").find("a")
+                email = email_element.get_text(strip=True) if email_element else "Unknown Email"
+
+                # 텍스트 내용 조합
+                text_content = f"성함(이름):{title}, 연구실(장소):{contact_place}, 이메일:{email}"
+
+                # 날짜와 URL 설정
+                date = "작성일24-01-01 00:00"
+                prof_url = url
+
+                # 각 교수의 정보를 all_data에 추가
+                all_data.append((title, text_content, image_content, date, prof_url))
+
+        except Exception as e:
+            print(f"Error processing {url}: {e}")
+
+    # ThreadPoolExecutor를 이용하여 병렬 크롤링
+    with ThreadPoolExecutor() as executor:
+        executor.map(fetch_professor_info, urls)
+
+    return all_data
+
+######   직원의 정보 받아오는 코드 ##########
+
+def extract_professor_info_from_urls_3(urls):
+    all_data = []
+
+    def fetch_professor_info(url):
+        try:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # 교수 정보가 담긴 요소들 선택
+            professor_elements = soup.find("div", id="Student").find_all("li")
+
+            for professor in professor_elements:
+                # 이미지 URL 추출
+                image_element = professor.find("div", class_="img").find("img")
+                image_content = image_element["src"] if image_element else "Unknown Image URL"
+
+                # 이름 추출
+                name_element = professor.find("div", class_="cnt").find("h1")
+                title = name_element.get_text(strip=True) if name_element else "Unknown Name"
+
+                # 연락처 추출
+                contact_number_element = professor.find("span", class_="period")
+                contact_number = contact_number_element.get_text(strip=True) if contact_number_element else "Unknown Contact Number"
+
+                # 연구실 위치 추출
+                contact_info = professor.find_all("dl", class_="dep")
+                contact_place = contact_info[0].find("dd").get_text(strip=True) if len(contact_info) > 0 else "Unknown Contact Place"
+
+                # 이메일 추출
+                email = contact_info[1].find("dd").find("a").get_text(strip=True) if len(contact_info) > 1 else "Unknown Email"
+
+                # 담당 업무 추출
+                role = contact_info[2].find("dd").get_text(strip=True) if len(contact_info) > 2 else "Unknown Role"
+
+                # 텍스트 내용 조합
+                text_content = f"성함(이름):{title}, 연락처(전화번호):{contact_number}, 사무실(장소):{contact_place}, 이메일:{email}, 담당업무:{role}"
+
+                # 날짜와 URL 설정
+                date = "작성일24-01-01 00:00"
+                prof_url = url
+
+                # 각 교수의 정보를 all_data에 추가
+                all_data.append((title, text_content, image_content, date, prof_url))
+
+        except Exception as e:
+            print(f"Error processing {url}: {e}")
+
+    # ThreadPoolExecutor를 이용하여 병렬 크롤링
+    with ThreadPoolExecutor() as executor:
+        executor.map(fetch_professor_info, urls)
+
+    return all_data
+
+
+
+# 교수진 페이지 URL 목록
+urls2 = [
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&lang=kor",
+]
+
+urls3 = [
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor",
+]
+
+urls4 = [
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5&lang=kor",
+]
