@@ -42,10 +42,9 @@ upstage_api_key = 'up_pGRnryI1JnrxChGycZmswEZm934Tf'  # 여기에 Upstage API �
 # Pinecone API 설정 및 초기화
 pc = Pinecone(api_key=pinecone_api_key)
 index = pc.Index(index_name)
+
 def get_korean_time():
     return datetime.now(pytz.timezone('Asia/Seoul'))
-
-
 
 # URL에서 제목, 날짜, 내용(본문 텍스트와 이미지 URL) 추출하는 공지사항 함수
 def extract_text_and_date_from_url(urls):
@@ -97,7 +96,9 @@ def extract_text_and_date_from_url(urls):
     return all_data
 
 
-
+# 교수 정보 추출 함수 1, 2 ,3
+# input : url 리스트
+# ouput : list of (title, text_content, image_content, date, prof_url)
 def extract_professor_info_from_urls(urls):
     all_data = []
 
@@ -138,7 +139,7 @@ def extract_professor_info_from_urls(urls):
 
     # ThreadPoolExecutor를 이용하여 병렬 크롤링
     with ThreadPoolExecutor() as executor:
-        results = executor.map(fetch_professor_info, urls)
+        executor.map(fetch_professor_info, urls)
 
     return all_data
 
@@ -247,35 +248,7 @@ def get_latest_wr_id():
             return int(match.group(1))
     return None
 
-
-# 스크래핑할 URL 목록 생성
-now_number = get_latest_wr_id()
-urls = []
-for number in range(now_number, 27726, -1):     #2024-08-07 수강신청 안내시작..28148
-    urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
-
-# 교수진 페이지 URL 목록
-urls2 = [
-    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&lang=kor",
-]
-
-urls3 = [
-    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor",
-]
-
-urls4 = [
-    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5&lang=kor",
-]
-
-# URL에서 문서와 날짜 추출
-document_data = extract_text_and_date_from_url(urls)
-prof_data = extract_professor_info_from_urls(urls2)
-prof_data_2 = extract_professor_info_from_urls_2(urls3)
-prof_data_3 = extract_professor_info_from_urls_3(urls4)
-
-combined_prof_data = prof_data + prof_data_2 + prof_data_3
-
-# 텍스트 분리기 초기화
+# text -> chunk splitter.
 class CharacterTextSplitter:
     def __init__(self, chunk_size=1000, chunk_overlap=150):
         self.chunk_size = chunk_size
@@ -287,7 +260,36 @@ class CharacterTextSplitter:
             chunks.append(text[i:i + self.chunk_size])
         return chunks
 
-text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+
+'''
+# 본격적인 크롤링 시작
+'''
+
+# 스크래핑할 URL 목록 생성
+now_number = get_latest_wr_id()
+urls = []
+for number in range(now_number, 27726, -1):     #2024-08-07 수강신청 안내시작..28148
+    urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
+
+# 교수진 페이지 URL 목록 리스트
+prof_urls = [
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&lang=kor",
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor",
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5&lang=kor"
+]
+
+# URL에서 문서와 날짜 추출
+document_data = extract_text_and_date_from_url(urls)
+
+# url에서 교수 정보 추출.
+prof_data = extract_professor_info_from_urls(prof_urls[0])
+prof_data_2 = extract_professor_info_from_urls_2(prof_urls[1])
+prof_data_3 = extract_professor_info_from_urls_3(prof_urls[2])
+combined_prof_data = prof_data + prof_data_2 + prof_data_3
+
+# chunck 크기따라 text 분리 객체 생성.
+# chunk_size=1000, chunk_overlap=150
+text_splitter = CharacterTextSplitter()
 
 # 텍스트 분리 및 URL과 날짜 매핑
 texts = []
@@ -460,8 +462,6 @@ bm25_titles = BM25Okapi(tokenized_titles, k1=1.5, b=0.75)  # 기존 파라미터
 
 
 
-
-
 # Dense Retrieval (Upstage 임베딩)
 embeddings = UpstageEmbeddings(
   api_key=upstage_api_key,
@@ -478,9 +478,6 @@ for i, embedding in enumerate(dense_doc_vectors):
         "date": doc_dates[i]  # 날짜 메타데이터 추가
     }
     index.upsert([(str(i), embedding.tolist(), metadata)])  # 문서 ID, 임베딩 벡터, 메타데이터 추가
-
-
-
 
 
 def best_docs(user_question):

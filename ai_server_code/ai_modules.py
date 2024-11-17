@@ -13,7 +13,7 @@ from langchain.prompts import PromptTemplate
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
 from langchain.schema import Document
-from langchain_community.vectorstores import FAISS
+from langchain.vectorstores import FAISS
 import re
 from datetime import datetime
 import pytz
@@ -32,6 +32,12 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 from konlpy.tag import Okt
 from difflib import SequenceMatcher
+from pymongo import MongoClien
+
+#############################################
+#		enviroment                          #
+#############################################
+
 # Pinecone API 키와 인덱스 이름 선언
 pinecone_api_key = 'cd22a6ee-0b74-4e9d-af1b-a1e83917d39e'  # 여기에 Pinecone API 키를 입력
 index_name = 'prof'
@@ -42,12 +48,35 @@ upstage_api_key = 'up_pGRnryI1JnrxChGycZmswEZm934Tf'  # 여기에 Upstage API �
 # Pinecone API 설정 및 초기화
 pc = Pinecone(api_key=pinecone_api_key)
 index = pc.Index(index_name)
+
+# mongodb 연결, client로
+client = MongoClient("mongodb://localhost:27017/")
+
+
+db = client["test_database"]
+collection = db["test_collection"]
+
+# 데이터 삽입
+# 하나의 문서 삽입
+data = {"name": "Alice", "age": 25, "city": "Seoul"}
+collection.insert_one(data)
+
+# 여러 문서 삽입
+data_list = [
+    {"name": "Bob", "age": 30, "city": "Busan"},
+    {"name": "Charlie", "age": 35, "city": "Incheon"}
+]
+collection.insert_many(data_list)
+
+
+
 def get_korean_time():
     return datetime.now(pytz.timezone('Asia/Seoul'))
 
 
-
 # URL에서 제목, 날짜, 내용(본문 텍스트와 이미지 URL) 추출하는 공지사항 함수
+# input : url 리스트
+# ouput : list of (title, text_content, image_content, date, 공지사항 url)
 def extract_text_and_date_from_url(urls):
     all_data = []
 
@@ -97,7 +126,9 @@ def extract_text_and_date_from_url(urls):
     return all_data
 
 
-
+# 교수 정보 추출 함수 1, 2 ,3
+# input : url 리스트
+# ouput : list of (title, text_content, image_content, date, prof_url)
 def extract_professor_info_from_urls(urls):
     all_data = []
 
@@ -138,9 +169,10 @@ def extract_professor_info_from_urls(urls):
 
     # ThreadPoolExecutor를 이용하여 병렬 크롤링
     with ThreadPoolExecutor() as executor:
-        results = executor.map(fetch_professor_info, urls)
+        executor.map(fetch_professor_info, urls)
 
     return all_data
+
 
 def extract_professor_info_from_urls_2(urls):
     all_data = []
@@ -185,6 +217,7 @@ def extract_professor_info_from_urls_2(urls):
         executor.map(fetch_professor_info, urls)
 
     return all_data
+
 
 def extract_professor_info_from_urls_3(urls):
     all_data = []
@@ -248,34 +281,7 @@ def get_latest_wr_id():
     return None
 
 
-# 스크래핑할 URL 목록 생성
-now_number = get_latest_wr_id()
-urls = []
-for number in range(now_number, 27726, -1):     #2024-08-07 수강신청 안내시작..28148
-    urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
-
-# 교수진 페이지 URL 목록
-urls2 = [
-    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&lang=kor",
-]
-
-urls3 = [
-    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor",
-]
-
-urls4 = [
-    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5&lang=kor",
-]
-
-# URL에서 문서와 날짜 추출
-document_data = extract_text_and_date_from_url(urls)
-prof_data = extract_professor_info_from_urls(urls2)
-prof_data_2 = extract_professor_info_from_urls_2(urls3)
-prof_data_3 = extract_professor_info_from_urls_3(urls4)
-
-combined_prof_data = prof_data + prof_data_2 + prof_data_3
-
-# 텍스트 분리기 초기화
+# text -> chunk splitter.
 class CharacterTextSplitter:
     def __init__(self, chunk_size=1000, chunk_overlap=150):
         self.chunk_size = chunk_size
@@ -287,7 +293,37 @@ class CharacterTextSplitter:
             chunks.append(text[i:i + self.chunk_size])
         return chunks
 
-text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+
+'''
+# 본격적인 크롤링 시작
+'''
+
+# 스크래핑할 URL 목록 생성
+now_number = get_latest_wr_id()
+urls = []
+for number in range(now_number, 27726, -1):     #2024-08-07 수강신청 안내시작..28148
+    urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
+
+
+# 교수진 페이지 URL 목록 리스트
+prof_urls = [
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&lang=kor",
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor",
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5&lang=kor"
+]
+
+# URL에서 문서와 날짜 추출
+document_data = extract_text_and_date_from_url(urls)
+
+# url에서 교수 정보 추출.
+prof_data = extract_professor_info_from_urls(prof_urls[0])
+prof_data_2 = extract_professor_info_from_urls_2(prof_urls[1])
+prof_data_3 = extract_professor_info_from_urls_3(prof_urls[2])
+combined_prof_data = prof_data + prof_data_2 + prof_data_3
+
+# chunck 크기따라 text 분리 객체 생성.
+# chunk_size=1000, chunk_overlap=150
+text_splitter = CharacterTextSplitter()
 
 # 텍스트 분리 및 URL과 날짜 매핑
 texts = []
@@ -295,6 +331,7 @@ image_url=[]
 titles = []
 doc_urls = []
 doc_dates = []
+
 for title, doc, image, date, url in document_data:
     if isinstance(doc, str) and doc.strip():  # doc가 문자열인지 확인하고 비어있지 않은지 확인
         split_texts = text_splitter.split_text(doc)
@@ -360,7 +397,7 @@ for title, doc, image, date, url in combined_prof_data :
         professor_doc_urls.append(url)
         professor_doc_dates.append(date)
 
-# 교수 정보 데이터를 기존 데이터와 합치기
+# 교수 정보 데이터를 기존 데이터와 합치기 -> 이 부분을 데이터 베이스에 저장하자.
 texts.extend(professor_texts)
 image_url.extend(professor_image_urls)
 titles.extend(professor_titles)
@@ -369,73 +406,73 @@ doc_dates.extend(professor_doc_dates)
 
 ########################################################################################################
 
-def transformed_query(content):
+def transformed_query(user_question):
     # 중복된 단어를 제거한 명사를 담을 리스트
     query_nouns = []
 
     # 1. 숫자와 특정 단어가 결합된 패턴 추출 (예: '2024학년도', '1월' 등)
     pattern = r'\d+(?:학년도|년|월|일|학기|시|분|초)?'
-    number_matches = re.findall(pattern, content)
+    number_matches = re.findall(pattern, user_question)
     query_nouns += number_matches
     # 추출된 단어를 content에서 제거
     for match in number_matches:
-        content = content.replace(match, '')
+        user_question = user_question.replace(match, '')
 
     # 2. 영어와 한글이 붙어 있는 패턴 추출 (예: 'SW전공' 등)
     eng_kor_pattern = r'\b[a-zA-Z]+[가-힣]+\b'
-    eng_kor_matches = re.findall(eng_kor_pattern, content)
+    eng_kor_matches = re.findall(eng_kor_pattern, user_question)
     query_nouns += eng_kor_matches
     # 추출된 단어를 content에서 제거
     for match in eng_kor_matches:
-        content = content.replace(match, '')
+        user_question = user_question.replace(match, '')
 
     # 3. 영어 단어 단독으로 추출
-    english_words = re.findall(r'\b[a-zA-Z]+\b', content)
+    english_words = re.findall(r'\b[a-zA-Z]+\b', user_question)
     query_nouns += english_words
     # 추출된 단어를 content에서 제거
     for match in english_words:
-        content = content.replace(match, '')
+        user_question = user_question.replace(match, '')
     # 4. "튜터"라는 단어가 포함되어 있으면 "TUTOR" 추가
-    if '튜터' in content:
+    if '튜터' in user_question:
         query_nouns.append('TUTOR')
-        content = content.replace('튜터', '')  # '튜터' 제거
-    if '탑싯' in content:
+        user_question = user_question.replace('튜터', '')  # '튜터' 제거
+    if '탑싯' in user_question:
         query_nouns.append('TOPCIT')
-        content=content.replace('탑싯','')
-    if '시험' in content:
+        user_question = user_question.replace('탑싯','')
+    if '시험' in user_question:
         query_nouns.append('시험')
-    if '하계' in content:
+    if '하계' in user_question:
         query_nouns.append('여름')
         query_nouns.append('하계')
-    if '동계' in content:
+    if '동계' in user_question:
         query_nouns.append('겨울')
         query_nouns.append('동계')
-    if '겨울' in content:
+    if '겨울' in user_question:
         query_nouns.append('겨울')
         query_nouns.append('동계')
-    if '여름' in content:
+    if '여름' in user_question:
         query_nouns.append('여름')
         query_nouns.append('하계')
-    if '성인지' in content:
+    if '성인지' in user_question:
         query_nouns.append('성인지')
-    if '첨성인' in content:
+    if '첨성인' in user_question:
         query_nouns.append('첨성인')
-    if '글솦' in content:
+    if '글솦' in user_question:
         query_nouns.append('글솝')
-    if '수꾸' in content:
+    if '수꾸' in user_question:
         query_nouns.append('수강꾸러미')
     # 5. Okt 형태소 분석기를 이용한 추가 명사 추출
     okt = Okt()
-    additional_nouns = [noun for noun in okt.nouns(content) if len(noun) >= 1]
+    additional_nouns = [noun for noun in okt.nouns(user_question) if len(noun) >= 1]
     query_nouns += additional_nouns
     # "공지", "사항", "공지사항"을 query_nouns에서 제거
     remove_noticement = ['공지', '사항', '공지사항','필독','첨부파일']
     query_nouns = [noun for noun in query_nouns if noun not in remove_noticement]
     # 6. "수강" 단어와 관련된 키워드 결합 추가
-    if '수강' in content:
+    if '수강' in user_question:
         related_keywords = ['변경', '신청', '정정', '취소','꾸러미']
         for keyword in related_keywords:
-            if keyword in content:
+            if keyword in user_question:
                 # '수강'과 결합하여 새로운 키워드 추가
                 combined_keyword = '수강' + keyword
                 query_nouns.append(combined_keyword)
@@ -448,28 +485,24 @@ def transformed_query(content):
     query_nouns = list(set(query_nouns))
     return query_nouns
 
+'''
+transformed 된 user query BM25 유사도 계산 모듈
+'''
+# 데이터 베이스에 있는 자료에서 찾는 코드로 변경할 필요가 있음.
 # BM25 유사도 계산
 tokenized_titles = [transformed_query(title) for title in titles]# 제목마다 명사만 추출하여 토큰화
 
 # 기존과 동일한 파라미터를 사용하고 있는지 확인
 bm25_titles = BM25Okapi(tokenized_titles, k1=1.5, b=0.75)  # 기존 파라미터 확인
-# BM25 유사도 계산
-tokenized_titles = [transformed_query(title) for title in titles]# 제목마다 명사만 추출하여 토큰화
-# 기존과 동일한 파라미터를 사용하고 있는지 확인
-bm25_titles = BM25Okapi(tokenized_titles, k1=1.5, b=0.75)  # 기존 파라미터 확인
-
-
-
-
 
 # Dense Retrieval (Upstage 임베딩)
 embeddings = UpstageEmbeddings(
-  api_key=upstage_api_key,
+  api_key = upstage_api_key,
   model="solar-embedding-1-large"
 ) # Upstage API 키 사용
 dense_doc_vectors = np.array(embeddings.embed_documents(texts))  # 문서 임베딩
 
-# Pinecone에 문서 임베딩 저장 (문서 텍스트와 URL, 날짜를 메타데이터에 포함)
+# Pinecone에 문서 임베딩 저장 (문서 텍스트와 URL, 날짜를 메타데이터에 포함) -> 요건 크롤러에 넣자.
 for i, embedding in enumerate(dense_doc_vectors):
     metadata = {
         "title": titles[i],
@@ -490,11 +523,12 @@ def best_docs(user_question):
       #print(f"=================\n\n question: {user_question} 추출된 명사: {query_noun}")
 
       title_question_similarities = bm25_titles.get_scores(query_noun)  # 제목과 사용자 질문 간의 유사도
-      title_question_similarities/=25
+      title_question_similarities /= 25
 
       # 사용자 질문에서 추출한 명사와 각 문서 제목에 대한 유사도를 조정하는 함수
       def adjust_similarity_scores(query_noun, titles, similarities):
           # 각 제목에 대해 명사가 포함되어 있는지 확인 후 유사도 조정
+          # titles 데베에서 불러오기 코드 필요할듯.
           for idx, title in enumerate(titles):
               # 제목에 포함된 query_noun 요소의 개수를 센다
               matching_nouns = [noun for noun in query_noun if noun in title]
@@ -524,7 +558,7 @@ def best_docs(user_question):
           return similarities
 
 
-      top_15_titles_idx = np.argsort(title_question_similarities)[-20:][::-1]
+      #top_15_titles_idx = np.argsort(title_question_similarities)[-20:][::-1]
       # tooop=top_15_titles_idx[:3]
       # print("처음 정렬된 BM25 문서:")
       # for idx in tooop:  # top_20_titles_idx에서 각 인덱스를 가져옴
@@ -532,12 +566,14 @@ def best_docs(user_question):
       #     print(f"  유사도: {title_question_similarities[idx]}")
       #     print(f" URL: {doc_urls[idx]}")
       #     print("-" * 50)
-      # 조정된 유사도 계산
-      adjusted_similarities = adjust_similarity_scores(query_noun, titles, title_question_similarities)
+      
       # 유사도 기준 상위 15개 문서 선택
       top_20_titles_idx = np.argsort(title_question_similarities)[-20:][::-1]
+      # 조정된 유사도 계산
+      adjusted_similarities = adjust_similarity_scores(query_noun, titles, title_question_similarities)
+     
 
-       # 결과 출력
+      # 결과 출력
       # print("최종 정렬된 BM25 문서:")
       # for idx in top_20_titles_idx:  # top_20_titles_idx에서 각 인덱스를 가져옴
       #     print(f"  제목: {titles[idx]}")
@@ -561,7 +597,7 @@ def best_docs(user_question):
                             res['metadata'].get('url', 'No URL')) for res in pinecone_results_text['matches']]
 
       # 2. Dense Retrieval - Title 임베딩 기반 20개 문서 추출
-      dense_noun=transformed_query(user_question)
+      dense_noun = transformed_query(user_question)
       query_title_dense_vector = np.array(embeddings.embed_query(dense_noun))  # 사용자 질문에 대한 제목 임베딩
 
 
@@ -570,7 +606,7 @@ def best_docs(user_question):
 
       # 1. 본문 기반 문서를 combine_dense_docs에 먼저 추가
       for idx, text_doc in enumerate(pinecone_docs_text):
-          text_similarity = pinecone_similarities_text[idx]*3.5
+          text_similarity = pinecone_similarities_text[idx] * 3.5
           combine_dense_docs.append((text_similarity, text_doc))  # (유사도, (제목, 날짜, 본문, URL))
 
       ####query_noun에 포함된 키워드로 유사도를 보정
