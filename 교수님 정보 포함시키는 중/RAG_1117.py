@@ -167,9 +167,6 @@ def extract_professor_info_from_urls(urls):
         except Exception as e:
             print(f"Error processing {url}: {e}")
 
-    with ThreadPoolExecutor() as executor:
-        results = executor.map(fetch_professor_info, urls)
-
     return all_data
 
 def extract_professor_info_from_urls_2(urls):
@@ -905,7 +902,7 @@ def get_answer_from_chain(best_docs, user_question):
         | StrOutputParser()
     )
 
-    return qa_chain, relevant_docs 
+    return qa_chain, retriever, relevant_docs 
 
 def question_valid(question, top_docs, query_noun):
     prompt = f"""
@@ -996,7 +993,7 @@ def get_ai_message(question):
          return  f"항상 정확한 답변을 제공하지 못할 수 있습니다.아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.\n{doc_references}"
 
     else:
-        qa_chain, relevant_docs = get_answer_from_chain(top_docs, question) 
+        qa_chain, retriever, relevant_docs = get_answer_from_chain(top_docs, question) 
         image_display = ""
         seen_img_urls = set() 
         
