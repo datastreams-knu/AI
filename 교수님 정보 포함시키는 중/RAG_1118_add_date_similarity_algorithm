@@ -79,6 +79,17 @@ urls = []
 for number in range(now_number, 27726, -1):     #2024-08-07 수강신청 안내시작..28148
     urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
 
+add_urls=[]
+add_urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=27510")
+add_urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=27047")
+add_urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=27614")
+add_urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=27246")
+add_urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=25900")
+add_urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=27553")
+add_urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=25896")
+
+urls.extend(add_urls)
+
 # URL에서 제목, 날짜, 내용(본문 텍스트와 이미지 URL) 추출하는 공지사항 함수
 def extract_text_and_date_from_url(urls):
     all_data = []
@@ -724,6 +735,14 @@ def transformed_query(content):
         query_nouns.append('장학')
     if '대해' in content:
         content=content.replace('대해','')
+    if '에이빅' in content:
+        query_nouns.append('에이빅')
+        content=content.replace('에이빅','')
+    if '채용' in content and any(keyword in content for keyword in ['모집','공고']):
+        if '모집' in content:
+          content=content.replace('모집','')
+        if '공고' in content:
+          content=content.replace('공고','')
     # 비슷한 의미 모두 추가 (세미나)
     related_keywords = ['세미나', '행사', '특강', '강연']
     if any(keyword in content for keyword in related_keywords):
@@ -782,27 +801,38 @@ def parse_date_change_korea_time(date_str):
 def calculate_weight_by_days_difference(post_date, current_date,query_nouns):
     # 날짜 차이 계산 (일 단위)
     days_diff = (current_date - post_date).days
-    # 15일 단위로 나눔
-    
+    # 기준 날짜 (24-01-01 00:00) 설정
+    baseline_date_str = "24-01-01 00:00"
+    baseline_date = parse_date_change_korea_time(baseline_date_str)
+
+    # 작성일이 기준 날짜 이전이면 가중치를 1.45로 고정
+    if post_date < baseline_date:
+        return 1.56
+
     # 가중치 설정
-    add_recent_weight=0
+    add_recent_weight = 0
+    # 15일 단위로 나눔
     month_unit = days_diff // 15
-    if any(keyword in query_nouns for keyword in ['최근','최신','지금','현재']):
-      add_recent_weight=0.2
-      month_unit=days_diff//7
+    if any(keyword in query_nouns for keyword in ['최근', '최신', '지금', '현재']):
+        add_recent_weight = 0.3
+        month_unit = days_diff // 7
+
     weight_map = {
-        0: 1.55+add_recent_weight,  # 15일 이내
-        1: 1.478+add_recent_weight,  # 15~30일
+        0: 1.55 + add_recent_weight,  # 15일 이내
+        1: 1.478 + add_recent_weight,  # 15~30일
         2: 1.463,  # 31~45일
-        3: 1.439,  #46~60일
-        4: 1.421,  #61~75일
-        5: 1.41,  #76~90일
-        6: 1.40,  #91~105일
-        7: 1.37,  #106~120일
-        8: 1.35,
+        3: 1.443,  # 46~60일
+        4: 1.431,  # 61~75일
+        5: 1.423,  # 76~90일
+        6: 1.419,  # 91~105일
+        7: 1.411,  # 106~120일
+        8: 1.400,
+        9: 1.380,
+        10: 1.360,
     }
-    # 90일 이후는 가중치를 1.35로 설정 (왜냐면 직원, 교수의 경우는 24-01-01 00:00)으로 시작하기 떄문에0.x로 하는것보다는 1.35고정이 나음.
-    return weight_map.get(month_unit, 1.33)
+
+    # 150일 이후는 가중치를 1.32로 설정
+    return weight_map.get(month_unit, 1.32)
 
 # 유사도를 조정하는 함수
 def adjust_date_similarity(similarity, date_str,query_nouns):
@@ -915,8 +945,6 @@ def best_docs(user_question):
               # query_noun에 "대학원"이 없고 제목에 "대학원"이 포함된 경우 유사도를 0.1 감소
               if "대학원" not in query_noun and "대학원" in title:
                   similarities[idx] -= 1
-              if "파일럿" not in query_noun and "파일럿" in title:
-                  similarities[idx]-=1
               if ("현장" and "실습" and "현장실습" )not in query_noun and "대체" in query_noun:
                   similarities[idx]-=1
               if "수강" in query_noun and ("수강꾸러미" or "수강 꾸러미") in title:
@@ -930,8 +958,6 @@ def best_docs(user_question):
                   similarities[idx]+=1
               if '신입생' in query_noun and '수강신청' in query_noun and '일괄수강신청' in title:
                   similarities[idx]+=2.5
-              if '채용' in query_noun:
-                  similarities[idx]+=1
           return similarities
 
       adjusted_similarities = adjust_similarity_scores(query_noun, titles, title_question_similarities)
@@ -1059,6 +1085,12 @@ def best_docs(user_question):
                   score-=0.9
               if any(keyword in text for keyword in ['계약학과', '대학원', '타대학원']) and not any(keyword in query_noun for keyword in ['계약학과', '대학원', '타대학원']):
                   score -= 0.1  # 유사도 점수를 0.1 낮추기
+              if any(keyword in title for keyword in ['심컴','심화컴퓨터전공','심화 컴퓨터공학']) and any(keyword in user_question for keyword in['심컴','심화컴퓨터전공']):
+                  score+=0.7
+              if any(keyword in title for keyword in ['글로벌소프트웨어전공','글로벌SW전공','글솝','글솦']) and  any(keyword in user_question for keyword in ['글로벌소프트웨어전공','글로벌SW전공','글솝','글솦']):
+                  score+=0.7
+              if any(keyword in title for keyword in['인컴','인공지능컴퓨팅'])and any(keyword in user_question for keyword in ['인컴','인공지능컴퓨팅']):
+                  score+=0.7
               if '대학원' not in query_noun and '대학원생' not in query_noun and ('대학원' in title or '대학원생' in title):
                   score-=1
               if any(keyword in query_noun for keyword in ['대학원','대학원생']) and any (keyword in title for keyword in ['대학원','대학원생']):
