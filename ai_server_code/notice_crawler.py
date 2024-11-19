@@ -33,6 +33,7 @@ from rank_bm25 import BM25Okapi
 from konlpy.tag import Okt
 from difflib import SequenceMatcher
 import pandas as pd
+from pymongo import MongoClien
 
 # Pinecone API 키와 인덱스 이름 선언
 pinecone_api_key = 'cd22a6ee-0b74-4e9d-af1b-a1e83917d39e'  # 여기에 Pinecone API 키를 입력
@@ -44,6 +45,15 @@ upstage_api_key = 'up_pGRnryI1JnrxChGycZmswEZm934Tf'  # 여기에 Upstage API �
 # Pinecone API 설정 및 초기화
 pc = Pinecone(api_key=pinecone_api_key)
 index = pc.Index(index_name)
+
+# mongodb 연결, client로
+client = MongoClient("mongodb://localhost:27017/")
+
+db = client["test_database"]
+collection = db["test_collection"]
+
+# 데이터 삽입
+# 하나의 문서 삽입
 
 def get_korean_time():
     return datetime.now(pytz.timezone('Asia/Seoul'))
@@ -263,127 +273,9 @@ class CharacterTextSplitter:
         return chunks
 
 
-'''
-# 본격적인 크롤링 시작
-'''
-
-# 스크래핑할 URL 목록 생성
-now_number = get_latest_wr_id()
-urls = []
-for number in range(now_number, 27726, -1):     #2024-08-07 수강신청 안내시작..28148
-    urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
-
-# 교수진 페이지 URL 목록 리스트
-prof_urls = [
-    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&lang=kor",
-    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor",
-    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5&lang=kor"
-]
-
-
-document_data = extract_text_and_date_from_url(urls) # URL에서 문서 내용 추출 결과 리스트
-prof_data = extract_professor_info_from_urls(prof_urls[0])
-prof_data_2 = extract_professor_info_from_urls_2(prof_urls[1])
-prof_data_3 = extract_professor_info_from_urls_3(prof_urls[2])
-combined_prof_data = prof_data + prof_data_2 + prof_data_3 # url에서 교수 정보 추출 결과 리스트
-
-# chunck 크기따라 text 분리 객체 생성.
-# chunk_size=1000, chunk_overlap=150
-text_splitter = CharacterTextSplitter()
-
-# 텍스트 분리 및 URL과 날짜 매핑
-texts = []
-image_url=[]
-titles = []
-doc_urls = []
-doc_dates = []
-
-index_of_docs = 0   # 데이터베이스에 인덱스로 접근하기 위한 변수
-for title, doc, image, date, url in document_data:
-    
-    if isinstance(doc, str) and doc.strip():  # doc가 문자열인지 확인하고 비어있지 않은지 확인
-        split_texts = text_splitter.split_text(doc)
-        texts.extend(split_texts)
-        titles.extend([title] * len(split_texts))  # 제목을 분리된 텍스트와 동일한 길이로 추가
-        doc_urls.extend([url] * len(split_texts))
-        doc_dates.extend([date] * len(split_texts))  # 분리된 각 텍스트에 동일한 날짜 적용
-
-        # 이미지 URL도 저장
-        if image:  # 이미지 URL이 비어 있지 않은 경우
-            image_url.extend([image] * len(split_texts))  # 동일한 길이로 이미지 URL 추가
-        else:  # 이미지 URL이 비어 있는 경우
-            image_url.extend(["No content"] * len(split_texts))  # "No content" 추가
-
-    elif image:  # doc가 비어 있고 이미지가 있는 경우
-        # 텍스트는 "No content"로 추가
-        texts.append("No content")
-        titles.append(title)
-        doc_urls.append(url)
-        doc_dates.append(date)
-        image_url.append(image)  # 이미지 URL 추가
-
-    else:  # doc와 image가 모두 비어 있는 경우
-        texts.append("No content")
-        image_url.append("No content")  # 이미지도 "No content"로 추가
-        titles.append(title)
-        doc_urls.append(url)
-        doc_dates.append(date)
-
-# 교수 정보 크롤링 데이터 분리 및 저장
-professor_texts = []
-professor_image_urls = []
-professor_titles = []
-professor_doc_urls = []
-professor_doc_dates = []
-
-# prof_data는 extract_professor_info_from_urls 함수의 반환값
-for title, doc, image, date, url in combined_prof_data :
-    if isinstance(doc, str) and doc.strip():  # 교수 정보가 문자열로 있고 비어있지 않을 때
-        split_texts = text_splitter.split_text(doc)
-        professor_texts.extend(split_texts)
-        professor_titles.extend([title] * len(split_texts))  # 교수 이름을 분리된 텍스트와 동일한 길이로 추가
-        professor_doc_urls.extend([url] * len(split_texts))
-        professor_doc_dates.extend([date] * len(split_texts))  # 분리된 각 텍스트에 동일한 날짜 적용
-
-        # 이미지 URL도 저장
-        if image:  # 이미지 URL이 비어 있지 않은 경우
-            professor_image_urls.extend([image] * len(split_texts))  # 동일한 길이로 이미지 URL 추가
-        else:
-            professor_image_urls.extend(["No content"] * len(split_texts))  # "No content" 추가
-
-    elif image:  # doc가 비어 있고 이미지가 있는 경우
-        professor_texts.append("No content")
-        professor_titles.append(title)
-        professor_doc_urls.append(url)
-        professor_doc_dates.append(date)
-        professor_image_urls.append(image)  # 이미지 URL 추가
-
-    else:  # doc와 image가 모두 비어 있는 경우
-        professor_texts.append("No content")
-        professor_image_urls.append("No content")  # 이미지도 "No content"로 추가
-        professor_titles.append(title)
-        professor_doc_urls.append(url)
-        professor_doc_dates.append(date)
-
-# 교수 정보 데이터를 기존 데이터와 합치기 -> 이 부분을 데이터 베이스에 저장하자.
-texts.extend(professor_texts)
-image_url.extend(professor_image_urls)
-titles.extend(professor_titles)
-doc_urls.extend(professor_doc_urls)
-doc_dates.extend(professor_doc_dates)
-
-'''
-docs 컬렉션 스키마
-docs = {
-    "index" : "구분자",
-    "texts" :   "",
-    "image_url" : "",
-    "titles" : "",
-    "doc_urls" : "",
-    "doc_dates" : ""
-}
-'''
-########################################################################################################
+####################################################################
+#                   사용자 질문 명사화 함수                         #
+####################################################################
 def transformed_query(user_question):
     # 중복된 단어를 제거한 명사를 담을 리스트
     query_nouns = []
@@ -439,13 +331,16 @@ def transformed_query(user_question):
         query_nouns.append('글솝')
     if '수꾸' in user_question:
         query_nouns.append('수강꾸러미')
+        
     # 5. Okt 형태소 분석기를 이용한 추가 명사 추출
     okt = Okt()
     additional_nouns = [noun for noun in okt.nouns(user_question) if len(noun) >= 1]
     query_nouns += additional_nouns
+    
     # "공지", "사항", "공지사항"을 query_nouns에서 제거
     remove_noticement = ['공지', '사항', '공지사항','필독','첨부파일']
     query_nouns = [noun for noun in query_nouns if noun not in remove_noticement]
+    
     # 6. "수강" 단어와 관련된 키워드 결합 추가
     if '수강' in user_question:
         related_keywords = ['변경', '신청', '정정', '취소','꾸러미']
@@ -459,30 +354,138 @@ def transformed_query(user_question):
                 for keyword in related_keywords:
                   if keyword in query_nouns:
                     query_nouns.remove(keyword)
+                    
     # 최종 명사 리스트에서 중복된 단어 제거
     query_nouns = list(set(query_nouns))
     return query_nouns
+
+
+'''
+# 본격적인 크롤링 시작
+'''
+
+# 스크래핑할 URL 목록 생성
+now_number = get_latest_wr_id()
+urls = []
+for number in range(now_number, 27726, -1):     #2024-08-07 수강신청 안내시작..28148
+    urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
+
+# 교수진 페이지 URL 목록 리스트
+prof_urls = [
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&lang=kor",
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor",
+    "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5&lang=kor"
+]
+
+document_data = extract_text_and_date_from_url(urls) # URL에서 문서 내용 추출 결과 리스트
+prof_data = extract_professor_info_from_urls(prof_urls[0])
+prof_data_2 = extract_professor_info_from_urls_2(prof_urls[1])
+prof_data_3 = extract_professor_info_from_urls_3(prof_urls[2])
+combined_prof_data = prof_data + prof_data_2 + prof_data_3 # url에서 교수 정보 추출 결과 리스트
+
+# chunck 크기따라 text 분리 객체 생성.
+# chunk_size=1000, chunk_overlap=150
+text_splitter = CharacterTextSplitter() # 텍스트 분리 및 URL과 날짜 매핑
+
+index_of_docs = 0   # 데이터베이스에 인덱스로 접근하기 위한 변수, html의 wrid로 하면 될듯?
+for title, doc, image, date, url in document_data:
+    if isinstance(doc, str) and doc.strip():  # doc가 문자열인지 확인하고 비어있지 않은지 확인
+        texts = text_splitter.split_text(doc)
+        titles = [title] * len(texts)  # 제목을 분리된 텍스트와 동일한 길이로 추가
+        doc_urls = [url] * len(texts)
+        doc_dates = [date] * len(texts)  # 분리된 각 텍스트에 동일한 날짜 적용
+
+        # 이미지 URL도 저장
+        if image:  # 이미지 URL이 비어 있지 않은 경우
+            image_url = [image] * len(texts)  # 동일한 길이로 이미지 URL 추가
+        else:  # 이미지 URL이 비어 있는 경우
+            image_url = ["No content"] * len(texts)  # "No content" 추가
+
+    elif image:  # doc가 비어 있고 이미지가 있는 경우
+        # 텍스트는 "No content"로 추가
+        texts = "No content"
+        titles = title
+        doc_urls = url
+        doc_dates = date
+        image_url = image  # 이미지 URL 추가
+
+    else:  # doc와 image가 모두 비어 있는 경우
+        texts = "No content"
+        image_url = "No content"  # 이미지도 "No content"로 추가
+        titles = title
+        doc_urls = url
+        doc_dates = date
+    
+    #데이터베이스에 저장
+    data = {
+        "_id" : index_of_docs,
+        "text" : texts,
+        "title" : titles,
+        "transformed_title" : transformed_query(title),
+        "image_url" : image_url,
+        "doc_urls" : doc_urls,
+        "doc_date" : date
+    }
+    collection.insert_one(data)
+    index_of_docs += 1
+
+
+# prof_data는 extract_professor_info_from_urls 함수의 반환값
+for title, doc, image, date, url in combined_prof_data :
+    if isinstance(doc, str) and doc.strip():  # 교수 정보가 문자열로 있고 비어있지 않을 때
+        texts = text_splitter.split_text(doc)
+        titles = [title] * len(texts)  # 교수 이름을 분리된 텍스트와 동일한 길이로 추가
+        doc_urls = [url] * len(texts)
+        doc_dates = [date] * len(texts)  # 분리된 각 텍스트에 동일한 날짜 적용
+
+        # 이미지 URL도 저장
+        if image:  # 이미지 URL이 비어 있지 않은 경우
+            image_urls = [image] * len(texts)  # 동일한 길이로 이미지 URL 추가
+        else:
+            image_urls = ["No content"] * len(texts)  # "No content" 추가
+
+    elif image:  # doc가 비어 있고 이미지가 있는 경우
+        texts = "No content"
+        titles = title
+        doc_urls = url
+        doc_dates = date
+        image_urls = image  # 이미지 URL 추가
+
+    else:  # doc와 image가 모두 비어 있는 경우
+        texts = "No content"
+        image_urls = "No content"  # 이미지도 "No content"로 추가
+        titles = title
+        doc_urls = url
+        doc_dates = date
+    
+    data = {
+        "_id" : index_of_docs,
+        "text" : texts,
+        "title" : titles,
+        "transformed_title" : transformed_query(title),
+        "image_url" : image_url,
+        "doc_urls" : doc_urls,
+        "doc_dates" : date
+    }
+    collection.insert_one(data)
+    index_of_docs += 1
+
 
 '''
 transformed 된 user query BM25 유사도 계산 모듈
 데이터 베이스에 있는 자료에서 찾는 코드로 변경할 필요가 있음.
 '''
-# BM25 유사도 계산
-tokenized_titles = [transformed_query(title) for title in titles]# 제목마다 명사만 추출하여 토큰화
-
+tokenized_titles = [doc["transformed_title"] for doc in collection.find({}, {"transformed_title": 1, "_id": 0})]
 # 기존과 동일한 파라미터를 사용하고 있는지 확인
 bm25_titles = BM25Okapi(tokenized_titles, k1=1.5, b=0.75)  # 기존 파라미터 확인
 
-
-
-
 # Dense Retrieval (Upstage 임베딩)
 embeddings = UpstageEmbeddings(
-  api_key=upstage_api_key,
+  api_key = upstage_api_key,
   model="solar-embedding-1-large"
 ) # Upstage API 키 사용
-dense_doc_vectors = np.array(embeddings.embed_documents(texts))  # 문서 임베딩
 
+dense_doc_vectors = np.array(embeddings.embed_documents(texts))  # 문서 임베딩
 # Pinecone에 문서 임베딩 저장 (문서 텍스트와 URL, 날짜를 메타데이터에 포함)
 for i, embedding in enumerate(dense_doc_vectors):
     metadata = {

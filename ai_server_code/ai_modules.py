@@ -517,14 +517,7 @@ for i, embedding in enumerate(dense_doc_vectors):
 
 
 def best_docs(user_question):
-      # 사용자 질문
-      okt = Okt()
-      query_noun=transformed_query(user_question)
-      #print(f"=================\n\n question: {user_question} 추출된 명사: {query_noun}")
-
-      title_question_similarities = bm25_titles.get_scores(query_noun)  # 제목과 사용자 질문 간의 유사도
-      title_question_similarities /= 25
-
+     
       # 사용자 질문에서 추출한 명사와 각 문서 제목에 대한 유사도를 조정하는 함수
       def adjust_similarity_scores(query_noun, titles, similarities):
           # 각 제목에 대해 명사가 포함되어 있는지 확인 후 유사도 조정
@@ -557,34 +550,18 @@ def best_docs(user_question):
                   similarities[idx]+=1
           return similarities
 
-
-      #top_15_titles_idx = np.argsort(title_question_similarities)[-20:][::-1]
-      # tooop=top_15_titles_idx[:3]
-      # print("처음 정렬된 BM25 문서:")
-      # for idx in tooop:  # top_20_titles_idx에서 각 인덱스를 가져옴
-      #     print(f"  제목: {titles[idx]}")
-      #     print(f"  유사도: {title_question_similarities[idx]}")
-      #     print(f" URL: {doc_urls[idx]}")
-      #     print("-" * 50)
+      query_noun = transformed_query(user_question) # 사용자 질문 명사화
       
-      # 유사도 기준 상위 15개 문서 선택
-      top_20_titles_idx = np.argsort(title_question_similarities)[-20:][::-1]
-      # 조정된 유사도 계산
-      adjusted_similarities = adjust_similarity_scores(query_noun, titles, title_question_similarities)
-     
-
-      # 결과 출력
-      # print("최종 정렬된 BM25 문서:")
-      # for idx in top_20_titles_idx:  # top_20_titles_idx에서 각 인덱스를 가져옴
-      #     print(f"  제목: {titles[idx]}")
-      #     print(f"  유사도: {title_question_similarities[idx]}")
-      #     print(f" URL: {doc_urls[idx]}")
-      #     print("-" * 50)
-
+      title_question_similarities = bm25_titles.get_scores(query_noun)  # 제목과 사용자 질문 간의 유사도 계산
+      title_question_similarities /= 25
+      
+      top_20_titles_idx = np.argsort(title_question_similarities)[-20:][::-1] # 유사도 기준 상위 20개 문서 선택
       Bm25_best_docs = [(titles[i], doc_dates[i], texts[i], doc_urls[i],image_url[i]) for i in top_20_titles_idx]
+      
+      adjusted_similarities = adjust_similarity_scores(query_noun, titles, title_question_similarities) # 조정된 유사도 계산
+      
 
       ####################################################################################################
-
       # 1. Dense Retrieval - Text 임베딩 기반 20개 문서 추출
       query_dense_vector = np.array(embeddings.embed_query(user_question))  # 사용자 질문 임베딩
 
@@ -600,7 +577,6 @@ def best_docs(user_question):
       dense_noun = transformed_query(user_question)
       query_title_dense_vector = np.array(embeddings.embed_query(dense_noun))  # 사용자 질문에 대한 제목 임베딩
 
-
       #####파인콘으로 구한  문서 추출 방식 결합하기.
       combine_dense_docs = []
 
@@ -612,17 +588,6 @@ def best_docs(user_question):
       ####query_noun에 포함된 키워드로 유사도를 보정
       # 유사도 기준으로 내림차순 정렬
       combine_dense_docs.sort(key=lambda x: x[0], reverse=True)
-
-      ## 결과 출력
-      # print("\n통합된 파인콘문서 유사도:")
-      # for score, doc in combine_dense_docs:
-      #     title, date, text, url = doc
-      #     print(f"제목: {title}\n유사도: {score} {url}")
-      #     print('---------------------------------')
-
-
-      #################################################3#################################################3
-      #####################################################################################################3
 
       # Step 1: combine_dense_docs에 제목, 본문, 날짜, URL을 미리 저장
 
@@ -664,14 +629,6 @@ def best_docs(user_question):
               final_best_docs.append((combined_similarity, bm25_doc[0], bm25_doc[1], bm25_doc[2], bm25_doc[3], bm25_doc[4]))
       final_best_docs.sort(key=lambda x: x[0], reverse=True)
       final_best_docs=final_best_docs[:20]
-
-
-
-      # print("\n\n\n\n필터링 전 최종문서 (유사도 큰 순):")
-      # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(final_best_docs):
-      #     print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor},본문 {len(tex)} 날짜: {dat}, URL: {ur}")
-      #     print("-" * 50)
-
 
 
       def last_filter_keyword(DOCS,query_noun):
@@ -718,15 +675,10 @@ def best_docs(user_question):
 
           return clusters
 
-
-
-      # Step 1: Adjust similarity scores based on the presence of query_noun
-
-
       # Step 2: Cluster documents by similarity
       clusters = cluster_documents_by_similarity(final_best_docs)
 
-      query_nouns=transformed_query(user_question)
+      query_nouns = transformed_query(user_question)
       # 날짜 형식을 datetime 객체로 변환하는 함수
       def parse_date(date_str):
           # '작성일'을 제거하고 공백을 제거한 뒤 날짜 형식으로 변환
@@ -757,38 +709,7 @@ def best_docs(user_question):
             sorted_cluster = sorted(clusters[0], key=lambda doc: doc[0], reverse=True)
 
       return [sorted_cluster[0]]
-      '''
-      final_best_docs=sorted_cluster
-      # Step 4: 결과 출력
-      # print("\n\n\n\n최종 상위 문서 (유사도 및 날짜 기준 정렬):")
-      # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(sorted_cluster):
-      #     print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor}, 날짜: {dat}, URL: {ur}")
-      #     print("-" * 50)
-
-      top_title =  final_best_docs[0][1]  # 최상위 문서의 제목 가져오기
-      top_score = final_best_docs[0][0]
-      # 기준 제목을 제외한 제목들을 추출
-      candidate_titles = [doc[1] for doc in final_best_docs[1:]]
-      # 제목 간 유사도 계산
-      vectorizer = TfidfVectorizer().fit_transform([top_title] + candidate_titles)
-      similarity_matrix = cosine_similarity(vectorizer)
-      title_similarities = similarity_matrix[0][1:]  # 첫 번째 제목과의 유사도 리스트
-      # 일정 유사도(threshold) 이상인 문서의 유사도 값을 합산
-      threshold = 0.6
-      adjusted_score = top_score  # 초기 상위 문서의 유사도 값
-      # 첫 번째 문서의 유사도를 조정된 값으로 업데이트
-      final_best_docs[0] = (adjusted_score, *final_best_docs[0][1:])
-      # Step 3: 최상위 문서와 동일한 제목을 가진 문서 필터링 및 개수 카운트
-      result_docs = [doc for doc in final_best_docs if doc[1] == top_title]
-      top_title_count = len(result_docs)
-      # Step 4: 결과 출력
-      # print("\n\n\n\n최종 상위 문서 (유사도 및 날짜 기준 정렬):")
-      # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(result_docs):
-      #     print(f"순위 {idx+1}: 제목: {titl[:10]}, 유사도: {scor}, 날짜: {dat}, URL: {ur}")
-      #     print("-" * 50)
-      return result_docs[:top_title_count]
-      '''
-
+    
 
 prompt_template = """당신은 경북대학교 컴퓨터학부 공지사항을 전달하는 직원이고, 사용자의 질문에 대해 올바른 공지사항의 내용을 참조하여 정확하게 전달해야 할 의무가 있습니다.
 현재 한국 시간: {current_time}
