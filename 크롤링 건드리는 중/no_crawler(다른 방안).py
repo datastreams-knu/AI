@@ -271,7 +271,7 @@ def best_docs(user_question):
       #     print(f" URL: {doc_urls[idx]}")
       #     print("-" * 50)
 
-      Bm25_best_docs = [(titles_from_pinecone[i], dates_from_pinecone[i], texts_from_pinecone[i], urls_from_pinecone[i],image_url[i]) for i in top_20_titles_idx]
+      Bm25_best_docs = [(titles_from_pinecone[i], dates_from_pinecone[i], texts_from_pinecone[i], urls_from_pinecone[i],images_from_pinecone[i]) for i in top_20_titles_idx]
 
       ####################################################################################################
 
@@ -555,7 +555,7 @@ def best_docs(user_question):
           return new_sorted_cluster,count
 
       # 예시 사용
-      final_cluster,count = organize_documents_v2(sorted_cluster, titles_from_pinecone, dates_from_pinecone, texts_from_pinecone, urls_from_pinecone, image_urls)
+      final_cluster,count = organize_documents_v2(sorted_cluster, titles_from_pinecone, dates_from_pinecone, texts_from_pinecone, urls_from_pinecone, images_from_pinecone)
       return final_cluster[:count], query_noun
 
 prompt_template = """당신은 경북대학교 컴퓨터학부 공지사항을 전달하는 직원이고, 사용자의 질문에 대해 올바른 공지사항의 내용을 참조하여 정확하게 전달해야 할 의무가 있습니다.
