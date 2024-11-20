@@ -483,6 +483,7 @@ for i, embedding in enumerate(dense_doc_vectors):
 
 
 
+
 def best_docs(user_question):
       # 사용자 질문
       okt = Okt()
