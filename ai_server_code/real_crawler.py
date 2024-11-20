@@ -496,8 +496,11 @@ collection.insert_one(tokenized_titles_data)
 
 # 기존과 동일한 파라미터를 사용하고 있는지 확인
 bm25_titles = BM25Okapi(tokenized_titles, k1=1.5, b=0.75)  # 기존 파라미터 확인
-
-
+bm25_titles_data = {
+	"_id" : 6,
+	"data" : bm25_titles
+}
+collection.insert_one(bm25_titles_data)
 
 # Dense Retrieval (Upstage 임베딩)
 embeddings = UpstageEmbeddings(
