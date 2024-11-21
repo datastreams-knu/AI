@@ -721,6 +721,10 @@ def get_ai_message(question):
     top_doc, query_noun = best_docs(question)  # 가장 유사한 문서 가져오기
     top_docs = [list(doc) for doc in top_doc]
     
+    if False == (question_valid(question, top_docs[0][1], query_noun)):
+      for i in range(len(top_docs)):
+          top_docs[i][0] -= 1
+
     final_score = top_docs[0][0]
     final_title = top_docs[0][1]
     final_date = top_docs[0][2]
