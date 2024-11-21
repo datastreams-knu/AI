@@ -718,7 +718,7 @@ def question_valid(question, top_docs, query_noun):
 
 ##### 유사도 제목 날짜 본문  url image_url순으로 저장됨
 def get_ai_message(question):
-    top_doc = best_docs(question)  # 가장 유사한 문서 가져오기
+    top_doc, query_noun = best_docs(question)  # 가장 유사한 문서 가져오기
     top_docs = [list(doc) for doc in top_doc]
     
     final_score = top_docs[0][0]
@@ -730,7 +730,10 @@ def get_ai_message(question):
 
     record = collection.find_one({"title" : final_title})
     if record :
-        final_image.extend(record["image_url"])
+        if(isinstance(record["image_url"], list)):
+          final_image.extend(record["image_url"])
+        else :
+          final_image.append(record["image_url"])
     else :
         print("일치하는 문서 존재 X")
         final_score = 0
@@ -743,15 +746,11 @@ def get_ai_message(question):
     # top_docs 인덱스 구성
     # 0: 유사도, 1: 제목, 2: 날짜, 3: 본문내용, 4: url, 5: 이미지url
 
-    # 이미지 + 공지사항만 존재하는 경우.
     if final_image[0] != "No content" and final_text == "No content" and final_score > 1.8:
-
-        doc_references = final_url
-
         # JSON 형식으로 반환할 객체 생성
         only_image_response = {
             "answer": None,
-            "references": doc_references,
+            "references": final_url,
             "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
             "images": final_image
         }
