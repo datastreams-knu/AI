@@ -4,7 +4,7 @@ import logging
 
 app = Flask(__name__)
 
-@app.route('/api/ai-response', methods=['POST'])
+@app.route('/ai/ai-response', methods=['POST'])
 def ai_response():
     try:
         data = request.get_json()
