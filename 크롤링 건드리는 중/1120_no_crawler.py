@@ -608,7 +608,7 @@ def format_docs(docs):
 
 def get_answer_from_chain(best_docs, user_question):
     documents = []
-    if doc[3]!="No content":
+    if doc[3] !="No content":
       doc_titles= [doc[1] for doc in best_docs]
       doc_dates=[doc[2] for doc in best_docs]
       doc_texts = [doc[3] for doc in best_docs]
