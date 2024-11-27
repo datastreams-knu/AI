@@ -48,8 +48,8 @@ def get_korean_time():
 # mongodb 연결, client로
 client = MongoClient("mongodb://localhost:27017/")
 
-db = client["test_db"]
-collection = db["test_collection"]
+db = client["knu_chatbot"]
+collection = db["notice_collection"]
 
 
 # 단어 명사화 함수.

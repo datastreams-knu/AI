@@ -66,8 +66,8 @@ def get_korean_time():
 # mongodb 연결, client로
 client = MongoClient("mongodb://localhost:27017/")
 
-db = client["test_db"]
-collection = db["test_collection"]
+db = client["knu_chatbot"]
+collection = db["notice_collection"]
 
 
 # 단어 명사화 함수.
@@ -296,10 +296,15 @@ for title, doc, image, date, url in document_data:
         doc_dates.append(date)
         image = "No content"
     
-    collection.insert_one({
+    temp_data = {
         "title" : title,
         "image_url" : image
-    })
+    	}
+    if not collection.find_one(temp_data):
+        collection.insert_one(temp_data)
+        print("Document inserted.")
+    else:
+        print("Duplicate document. Skipping insertion.")
 
 
 
@@ -518,10 +523,15 @@ for title, doc, image, date, url in combined_prof_data :
         professor_doc_dates.append(date)
         image = "No content"
     
-    collection.insert_one({
+    temp_data = {
         "title" : title,
         "image_url" : image
-    })
+    }
+    if not collection.find_one(temp_data):
+        collection.insert_one(temp_data)
+        print("Document inserted.")
+    else:
+        print("Duplicate document. Skipping insertion.")
     
 # 교수 정보 데이터를 기존 데이터와 합치기
 texts.extend(professor_texts)
@@ -642,10 +652,15 @@ for title, doc, image, date, url in company_data:
         doc_urls.append(url)
         doc_dates.append(date)
 
-    collection.insert_one({
+    temp_data = {
         "title" : title,
         "image_url" : image
-    })
+    }
+    if not collection.find_one(temp_data):
+        collection.insert_one(temp_data)
+        print("Document inserted.")
+    else:
+        print("Duplicate document. Skipping insertion.")
 
 ######################################################################################################
 ###########################취업정보임 위는  ##########################################################
@@ -757,10 +772,15 @@ for title, doc, image, date, url in seminar_data:
         doc_dates.append(date)
         image = "No content"
     
-    collection.insert_one({
+    temp_data = {
         "title" : title,
         "image_url" : image
-    })
+    }
+    if not collection.find_one(temp_data):
+        collection.insert_one(temp_data)
+        print("Document inserted.")
+    else:
+        print("Duplicate document. Skipping insertion.")
 
 ######################################################################################################
 ############################세미나임 위는  ##########################################################
