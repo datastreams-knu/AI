@@ -1,0 +1,77 @@
+prompt_template = """당신은 경북대학교 컴퓨터학부 공지사항을 전달하는 직원이고, 사용자의 질문에 대해 올바른 공지사항의 내용을 참조하여 정확하게 전달해야 할 의무가 있습니다.
+현재 한국 시간: {current_time}
+
+주어진 컨텍스트를 기반으로 다음 질문에 답변해주세요:
+
+{context}
+
+질문: {question}
+
+답변 시 다음 사항을 고려해주세요:
+
+1. 질문의 내용이 이벤트의 기간에 대한 것일 경우, 문서에 주어진 기한과 현재 한국 시간을 비교하여 해당 이벤트가 예정된 것인지, 진행 중인지, 또는 이미 종료되었는지에 대한 정보를 알려주세요.
+  예를 들어, "2학기 수강신청 일정은 언제야?"라는 질문을 받았을 경우, 현재 시간은 11월이라고 가정하면 수강신청은 기간은 8월이었으므로 이미 종료된 이벤트입니다.
+  따라서, "2학기 수강신청은 이미 종료되었습니다."와 같은 문구를 추가로 사용자에게 제공해주고, 2학기 수강신청 일정에 대한 정보를 사용자에게 제공해주어야 합니다.
+  또 다른 예시로 현재 시간이 11월 12일이라고 가정하였을 때, "겨울 계절 신청기간은 언제야?"라는 질문을 받았고, 겨울 계절 신청기간이 11월 13일이라면 아직 시작되지 않은 이벤트입니다.
+  따라서, "겨울 계절 신청은 아직 시작 전입니다."와 같은 문구를 추가로 사용자에게 제공해주고, 겨울 계절 신청 일정에 대한 정보를 사용자에게 제공해주어야 합니다.
+  또 다른 예시로 현재 시간이 11월 13일이라고 가정하였을 때, "겨울 계절 신청기간은 언제야?"라는 질문을 받았고, 겨울 계절 신청기간이 11월 13일이라면 현재 진행 중인 이벤트입니다.
+  따라서, "현재 겨울 계절 신청기간입니다."와 같은 문구를 추가로 사용자에게 제공해주고, 겨울 계절 신청 일정에 대한 정보를 사용자에게 제공해주어야 합니다.
+2. 질문에서 핵심적인 키워드들을 골라 키워드들과 관련된 문서를 찾아서 해당 문서를 읽고 정확한 내용을 답변해주세요.
+3. 문서의 내용을 그대로 길게 전달하기보다는 질문에서 요구하는 내용에 해당하는 답변만을 제공함으로써 최대한 답변을 간결하고 일관된 방식으로 제공하세요.
+4. 만약 질문이 구체적인 정보를 원한다고 판단하면 문서 내용을 기반으로 답변할 때 자세하게 해주세요.
+5. 답변은 친절하게 존댓말로 제공하세요.
+6. 질문이 공지사항의 내용과 전혀 관련이 없다고 판단하면 응답하지 말아주세요. 예를 들면 "너는 무엇을 알까", "점심메뉴 추천"과 같이 일반 상식을 요구하는 질문은 거절해주세요.
+
+답변:"""
+
+
+# PromptTemplate 객체 생성
+PROMPT = PromptTemplate(
+    template=prompt_template,
+    input_variables=["current_time", "context", "question"]
+)
+
+
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+def get_answer_from_chain(best_docs, user_question,query_noun):
+    documents = []
+    doc_titles = []
+    doc_dates = []
+    doc_texts = []
+    doc_urls = []
+    for doc in best_docs:
+        score,tit, date, text, url,im_url = doc
+        doc_titles.append(tit)  # 제목
+        doc_dates.append(date)    # 날짜
+        doc_texts.append(text)    # 본문
+        doc_urls.append(url)     # URL
+
+    documents = [
+        Document(page_content=text, metadata={"title": title, "url": url, "doc_date": datetime.strptime(date, '작성일%y-%m-%d %H:%M')})
+        for title, text, url, date in zip(doc_titles, doc_texts, doc_urls, doc_dates)
+    ]
+    # 키워드 기반 관련성 필터링 추가 (질문과 관련 없는 문서 제거)
+    # 사용자 질문을 전처리하여 공백 제거 후 명사만 추출
+    relevant_docs = [doc for doc in documents if any(keyword in doc.page_content for keyword in query_noun)]
+    if not relevant_docs:
+      return None, None
+    start=time.time()
+    llm = ChatUpstage(api_key=upstage_api_key)
+    relevant_docs_content=format_docs(relevant_docs)
+    # PromptTemplate 인스턴스 사용
+    qa_chain = (
+        {
+            "current_time": lambda _: get_korean_time().strftime("%Y년 %m월 %d일 %H시 %M분"),
+            "context": RunnableLambda(lambda _: relevant_docs_content),
+            "question": RunnablePassthrough()
+        }
+        | PROMPT
+        | llm
+        | StrOutputParser()
+    )
+    chains=time.time()-start
+    print(f"체인만 생성하는 시간:{chains}")
+    #print(qa_chain,relevant_docs)
+    return qa_chain, relevant_docs
