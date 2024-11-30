@@ -20,29 +20,36 @@ def calculate_weight_by_days_difference(post_date, current_date, query_nouns):
 
     # 작성일이 기준 날짜 이전이면 가중치를 1.35로 고정
     if post_date <= baseline_date:
-        return 1.3
+        return 1.4
 
     # '최근', '최신' 등의 키워드가 있는 경우, 최근 가중치를 추가
     add_recent_weight = 1.0 if any(keyword in query_nouns for keyword in ['최근', '최신', '지금', '현재']) else 0
 
-    # **5일 단위 구분**: 최근 문서에 대한 세밀한 가중치 부여
-    if days_diff <= 10:
-        return 1.30 + add_recent_weight
+    # **10일 단위 구분**: 최근 문서에 대한 세밀한 가중치 부여
+    if days_diff<=5:
+        return 1.33 + add_recent_weight
+    elif days_diff <= 10:
+        return 1.32 + add_recent_weight/1.5
+    elif days_diff <= 15:
+        return 1.30 + add_recent_weight/1.9
     elif days_diff <= 20:
-        return 1.27 + add_recent_weight
+        return 1.29 + add_recent_weight/2.5
+    elif days_diff <= 25:
+        return 1.27 + add_recent_weight/3.0
     elif days_diff <= 30:
-        return 1.25 + add_recent_weight
+        return 1.25 + add_recent_weight/3.5
     elif days_diff <= 60:
-        return 1.20 + add_recent_weight
+        return 1.23 + add_recent_weight/4.0
     elif days_diff <= 90:
-        return 1.16
+        return 1.20
     # **월 단위 구분**: 2개월 이후는 월 단위로 단순화
     month_diff = (days_diff - 90) // 30
     month_weight_map = {
-        0: 1.10 ,  # 2.5~3.5개월
-        1: 1.08 - add_recent_weight / 2,  # 3.5~4.5개월
-        2: 1.05 - add_recent_weight / 2,  # 4.5~5.5개월
-        3: 1.02 - add_recent_weight / 2,  # 5.5~6.5개월
+        0: 1.17 ,  # 2.5~3.5개월
+        1: 1.16 - add_recent_weight / 3,  # 3.5~4.5개월
+        2: 1.15 - add_recent_weight / 4,  # 4.5~5.5개월
+        3: 1.12 - add_recent_weight / 5,  # 5.5~6.5개월
+        4: 1.11 - add_recent_weight/6,
     }
 
     # 기본 가중치 반환 (6개월 이후)
@@ -72,29 +79,28 @@ def find_url(url, doc_url):
 def adjust_similarity_scores(query_noun, title,similarities):
 
     for idx, titl in enumerate(title):
-        # 제목에 포함된 query_noun 요소의 개수를 센다
+
         # 제목에 포함된 query_noun 요소의 개수를 센다
         matching_noun = [noun for noun in query_noun if noun in titl]
-
+        if texts[idx] == "No content":
+            similarities[idx] *=1.5 # 본문이 "No content"인 경우 유사도를 높임
         for noun in matching_noun:
-            similarities[idx] += len(noun)*0.25
+            similarities[idx] += len(noun)*0.21
             if re.search(r'\d', noun):  # 숫자가 포함된 단어 확인
                 if noun in title:  # 본문에도 숫자 포함 단어가 있는 경우 추가 조정
                     similarities[idx] += len(noun)*0.22
                 else:
                     similarities[idx]+=len(noun)*0.19
-        #print(title,similarities[idx])
-        # query_noun에 "대학원"이 없고 제목에 "대학원"이 포함된 경우 유사도를 0.1 감소
+        
         keywords = ['대학원', '대학원생']
 
-        # 조건 1: 둘 다 키워드 포함
         if any(keyword in query_noun for keyword in keywords) and any(keyword in titl for keyword in keywords):
             similarities[idx] += 2.0
-        # 조건 2: query_noun에 없고, title에만 키워드가 포함된 경우
         if not any(keyword in query_noun for keyword in keywords) and any(keyword in titl for keyword in keywords):
             similarities[idx] -= 2.0
-        if ("현장" and "실습" and "현장실습" )not in query_noun and "대체" in query_noun:
-            similarities[idx]-=1
+
+        if not any(keyword in query_noun for keyword in["현장", "실습", "현장실습"]) and any(keyword in titl for keyword in ["현장실습","대체","기준"]):
+            similarities[idx]-=2
         if "외국인" not in query_noun and "외국인" in title:
             similarities[idx]-=2.0
         if texts[idx] == "No content":
@@ -102,7 +108,7 @@ def adjust_similarity_scores(query_noun, title,similarities):
         if '마일리지' in query_noun and '마일리지' in title:
             similarities[idx]+=1
         if '신입생' in query_noun and '수강신청' in query_noun and '일괄수강신청' in title:
-            similarities[idx]+=1
+            similarities[idx]+=3.0
     return similarities
 
 
@@ -112,9 +118,23 @@ def last_filter_keyword(DOCS,query_noun,user_question):
         # 키워드가 포함된 경우 유사도를 조정하고, 유사도 기준으로 내림차순 정렬
         for idx, doc in enumerate(DOCS):
             score, title, date, text, url, image = doc
-
-            if any(keyword in query_noun for keyword in ['인턴','인턴십']) and '다낭' in title and '베트남' in title:
-                score+=2.0
+            if not any(keyword in query_noun for keyword in["현장", "실습", "현장실습"]) and any(keyword in title for keyword in ["현장실습","대체","기준"]):
+                score-=1.0
+            
+            # wr_id 뒤에 오는 숫자 추출
+            target_numbers = [27510, 27047, 27614, 27246, 25900, 27553, 25896, 28183]
+            match = re.search(r"wr_id=(\d+)", url)
+            if match:
+                extracted_number = int(match.group(1))
+                # 숫자가 target_numbers에 포함되면 score 증가
+                if extracted_number in target_numbers:
+                    score += 0.6
+            if any(keyword in query_noun for keyword in ['에이빅','ABEEK']) and any(keyword in text for keyword in ['에이빅','ABEEK']):
+                score+=1.0
+            if not any(keyword in query_noun for keyword in ['에이빅','ABEEK']) and any(keyword in text for keyword in ['에이빅','ABEEK']):
+                score-=0.3
+            if any(keyword in query_noun for keyword in ['인턴','인턴십'])  and '베트남' in title:
+                score+=1.0
             if '여름' in query_noun and '겨울' in title:
                 score-=1.0
             if '겨울' in query_noun and '여름' in title:
@@ -133,25 +153,26 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                 score+=0.7
             if any(keyword in title for keyword in ['심컴','심화컴퓨터전공','심화 컴퓨터공학','심화컴퓨터공학']):
               if any(keyword in user_question for keyword in['심컴','심화컴퓨터전공']):
-                score+=0.6
+                score+=0.7
               else:
                 score-=0.8
             elif any(keyword in title for keyword in ['글로벌소프트웨어전공','글로벌SW전공','글로벌소프트웨어융합전공','글솝','글솦']):
               if any(keyword in user_question for keyword in ['글로벌소프트웨어융합전공','글로벌소프트웨어전공','글로벌SW전공','글솝','글솦']):
-                score+=0.65
+                score+=0.7
               else:
                 if not "SDG" in query_noun:
                   score-=0.8
             elif any(keyword in title for keyword in['인컴','인공지능컴퓨팅']):
               if any(keyword in user_question for keyword in ['인컴','인공지능컴퓨팅']):
-                score+=0.8
+                score+=0.9
               else:
                 if not "SDG" in query_noun:
-                  score-=0.8
+                  score-=1.0
             if not any(keyword in user_question for keyword in ['벤처스타트업아카데미','스타트업']) and any(keyword in title for keyword in ['벤처스타트업아카데미','스타트업']):
                 score-=0.9
             if any(keyword in text for keyword in ['계약학과', '대학원', '타대학원']) and not any(keyword in query_noun for keyword in ['계약학과', '대학원', '타대학원']):
-                score -= 0.4  # 유사도 점수를 0.1 낮추기
+                score -= 0.4  # 유사도 점수를 0.4 낮추기
+            
             keywords = ['대학원', '대학원생']
 
             # 조건 1: 둘 다 키워드 포함
@@ -296,7 +317,7 @@ def best_docs(user_question):
       query_dense_vector = np.array(embeddings.embed_query(user_question))  # 사용자 질문 임베딩
 
       # Pinecone에서 텍스트에 대한 가장 유사한 벡터 20개 추출
-      pinecone_results_text = index.query(vector=query_dense_vector.tolist(), top_k=60, include_values=False, include_metadata=True)
+      pinecone_results_text = index.query(vector=query_dense_vector.tolist(), top_k=30, include_values=False, include_metadata=True)
       pinecone_similarities_text = [res['score'] for res in pinecone_results_text['matches']]
       pinecone_docs_text = [
           (res['metadata'].get('title', ''),
@@ -315,13 +336,13 @@ def best_docs(user_question):
 
       # 1. 본문 기반 문서를 combine_dense_docs에 먼저 추가
       for idx, text_doc in enumerate(pinecone_docs_text):
-          text_similarity = pinecone_similarities_text[idx]*3.3
+          text_similarity = pinecone_similarities_text[idx]*3.26
           text_similarity=adjust_date_similarity(text_similarity,text_doc[1],query_noun)
           matching_noun = [noun for noun in query_noun if noun in text_doc[2]]
 
           # # 본문에 포함된 명사 수 기반으로 유사도 조정
           for noun in matching_noun:
-              text_similarity += len(noun)*0.22
+              text_similarity += len(noun)*0.20
               if re.search(r'\d', noun):  # 숫자가 포함된 단어 확인
                   if noun in text_doc[2]:  # 본문에도 숫자 포함 단어가 있는 경우 추가 조정
                       text_similarity += len(noun)*0.24
@@ -431,7 +452,7 @@ def best_docs(user_question):
                       doc_in_date=parse_date_change_korea_time(doc[2])
                       compare_date=abs(cluster_date-doc_in_date).days
                       ## 두 비교 문서 유사도 차이 0.5 미만이면서 두 문서 날짜 차이가 60일 미만인 경우 추가한다.
-                      if cluster_title==title or(-doc[0]+cluster[0][0]<0.5 and cluster[0][3]!=doc[2] and compare_date<60):
+                      if cluster_title==title or(-doc[0]+cluster[0][0]<0.6 and cluster[0][3]!=doc[2] and compare_date<60):
                         cluster.append(doc)
                       added_to_cluster = True
                       break
