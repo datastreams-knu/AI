@@ -1,0 +1,154 @@
+def transformed_query(content):
+    # 중복된 단어를 제거한 명사를 담을 리스트
+    query_nouns = []
+
+    # 1. 숫자와 특정 단어가 결합된 패턴 추출 (예: '2024학년도', '1월' 등)
+    pattern = r'\d+(?:학년도|년|학년|월|일|학기|시|분|초|기|개|차)?'
+    number_matches = re.findall(pattern, content)
+    query_nouns += number_matches
+    # 추출된 단어를 content에서 제거
+    for match in number_matches:
+        content = content.replace(match, '')
+
+
+    # 1. 영어 단어를 단독으로 또는 한글과 결합된 경우 추출 (영어만 추출)
+    english_pattern = r'[a-zA-Z]+'
+    english_matches = re.findall(english_pattern, content)
+
+    # 대문자로 변환 후 query_nouns에 추가
+    english_matches_upper = [match.upper() for match in english_matches]
+    query_nouns += english_matches_upper
+
+    # content에서 영어 단어 제거
+    for match in english_matches:
+        content = re.sub(rf'\b{re.escape(match)}\b', '', content)
+
+    ## 직원 E9호관 있는거 추가하려고함.
+    if '공대' in content:
+        query_nouns.append('E')
+    if '설명회' in content:
+        query_nouns.append('설명회')
+    if '컴학' in content:
+        query_nouns.append('컴퓨터학부')
+    if '컴퓨터' in content and '비전' in content:
+        query_nouns.append('컴퓨터비전')
+        content = content.replace('컴퓨터 비전', '컴퓨터비전')
+        content = content.replace('컴퓨터비전', '')
+    if '컴퓨터' in content and '학부' in content:
+        query_nouns.append('컴퓨터학부')
+        content = content.replace('컴퓨터 학부', '컴퓨터학부')
+        content = content.replace('컴퓨터학부', '')
+    if '선발' in content:
+        content=content.replace('선발','')
+    if '차' in content:
+        query_nouns.append('차')
+    if '국가 장학금' in content:
+        query_nouns.append('국가장학금')
+        content=content.replace('국가 장학금','')
+    if '종프' in content:
+        query_nouns.append('종합설계프로젝트')
+    if '종합설계프로젝트' in content:
+        query_nouns.append('종합설계프로젝트')
+    if '대회' in content:
+        query_nouns.append('경진대회')
+        content=content.replace('대회','')
+    if '튜터' in content:
+        query_nouns.append('TUTOR')
+        content = content.replace('튜터', '')  # '튜터' 제거
+    if '탑싯' in content:
+        query_nouns.append('TOPCIT')
+        content=content.replace('탑싯','')
+    if '시험' in content:
+        query_nouns.append('시험')
+    if '하계' in content:
+        query_nouns.append('여름')
+        query_nouns.append('하계')
+    if '동계' in content:
+        query_nouns.append('겨울')
+        query_nouns.append('동계')
+    if '겨울' in content:
+        query_nouns.append('겨울')
+        query_nouns.append('동계')
+    if '여름' in content:
+        query_nouns.append('여름')
+        query_nouns.append('하계')
+    if '성인지' in content:
+        query_nouns.append('성인지')
+    if '첨성인' in content:
+        query_nouns.append('첨성인')
+    if '글솦' in content:
+        query_nouns.append('글솝')
+    if '수꾸' in content:
+        query_nouns.append('수강꾸러미')
+    if '장학금' in content:
+        query_nouns.append('장학생')
+        query_nouns.append('장학')
+    if '장학생' in content:
+        query_nouns.append('장학금')
+        query_nouns.append('장학')
+    if '대해' in content:
+        content=content.replace('대해','')
+    if '에이빅' in content:
+        query_nouns.append('에이빅')
+        query_nouns.append('ABEEK')
+        content=content.replace('에이빅','')
+    if '선이수' in content:
+        query_nouns.append('선이수')
+        content=content.replace('선이수','')
+    if '선후수' in content:
+        query_nouns.append('선이수')
+        content=content.replace('선후수','')
+    if '채용' in content and any(keyword in content for keyword in ['모집','공고']):
+        if '모집' in content:
+          content=content.replace('모집','')
+        if '공고' in content:
+          content=content.replace('공고','')
+    # 비슷한 의미 모두 추가 (세미나)
+    related_keywords = ['세미나','특강', '강연']
+    if any(keyword in content for keyword in related_keywords):
+        for keyword in related_keywords:
+            query_nouns.append(keyword)
+    # "공지", "사항", "공지사항"을 query_nouns에서 '공지사항'이라고 고정하고 나머지 부분 삭제
+    keywords=['공지','사항','공지사항']
+    if any(keyword in content for keyword in keywords):
+      # 키워드 제거
+      for keyword in keywords:
+          content = content.replace(keyword, '')
+          query_nouns.append('공지사항')
+
+    keywords=['사원','신입사원']
+    if any(keyword in content for keyword in keywords):
+        for keyword in keywords:
+          content = content.replace(keyword, '')
+          query_nouns.append('신입')
+    # 5. Okt 형태소 분석기를 이용한 추가 명사 추출
+    okt = Okt()
+    additional_nouns = [noun for noun in okt.nouns(content) if len(noun) > 1]
+    query_nouns += additional_nouns
+    if '인도' not in query_nouns and  '인턴십' in query_nouns:
+        query_nouns.append('베트남')
+
+    # 6. "수강" 단어와 관련된 키워드 결합 추가
+    if '수강' in content:
+        related_keywords = ['변경', '신청', '정정', '취소','꾸러미']
+        for keyword in related_keywords:
+            if keyword in content:
+                # '수강'과 결합하여 새로운 키워드 추가
+                combined_keyword = '수강' + keyword
+                query_nouns.append(combined_keyword)
+                if ('수강' in query_nouns):
+                  query_nouns.remove('수강')
+                for keyword in related_keywords:
+                  if keyword in query_nouns:
+                    query_nouns.remove(keyword)
+    # 최종 명사 리스트에서 중복된 단어 제거
+    query_nouns = list(set(query_nouns))
+    return query_nouns
+
+
+
+# BM25 유사도 계산
+tokenized_titles = [transformed_query(title) for title in titles]# 제목마다 명사만 추출하여 토큰화
+
+# 기존과 동일한 파라미터를 사용하고 있는지 확인
+bm25_titles = BM25Okapi(tokenized_titles, k1=1.5, b=0.75)  # 기존 파라미터 확인
