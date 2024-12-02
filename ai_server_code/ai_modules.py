@@ -660,6 +660,9 @@ def best_docs(user_question):
                   # 유사도가 threshold 이상이면 해당 클러스터에 추가
                   if similarity >= threshold:
                       #print(f"{doc[0]} {cluster[0][0]}  {title} {cluster_title}")
+                      cluster_date=parse_date_change_korea_time(cluster[0][2])
+                      doc_in_date=parse_date_change_korea_time(doc[2])
+                      compare_date=abs(cluster_date-doc_in_date).days
                       if cluster_title==title or(-doc[0]+cluster[0][0]<0.6 and cluster[0][3]!=doc[2] and compare_date<60):
                         cluster.append(doc)
                       added_to_cluster = True
