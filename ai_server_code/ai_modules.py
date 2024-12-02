@@ -964,8 +964,8 @@ def get_ai_message(question):
     top_docs = [list(doc) for doc in top_doc]
 
     if False == (question_valid(question, top_docs[0][1], query_noun)):
-    for i in range(len(top_docs)):
-        top_docs[i][0] -= 1
+        for i in range(len(top_docs)):
+            top_docs[i][0] -= 1
     
     final_score = top_docs[0][0]
     final_title = top_docs[0][1]
