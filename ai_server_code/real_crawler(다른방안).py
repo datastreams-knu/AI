@@ -183,9 +183,19 @@ def get_latest_wr_id():
 
 # 스크래핑할 URL 목록 생성
 now_number = get_latest_wr_id()
-urls = []
-for number in range(now_number, 27726, -1):     #2024-08-07 수강신청 안내시작..28148
-    urls.append("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=" + str(number))
+base_url = "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id="
+
+# 기본 URL 목록 생성
+urls = [f"{base_url}{number}" for number in range(now_number, 27726, -1)]
+
+# 추가로 필요한 URL 목록
+add_urls = [
+    27510, 27047, 27614, 27246, 25900,
+    27553, 25896, 25817, 25560, 27445
+]
+
+# 추가 URL을 `urls` 리스트에 확장
+urls.extend(f"{base_url}{wr_id}" for wr_id in add_urls)
 
 # URL에서 제목, 날짜, 내용(본문 텍스트와 이미지 URL) 추출하는 공지사항 함수
 def extract_text_and_date_from_url(urls):
