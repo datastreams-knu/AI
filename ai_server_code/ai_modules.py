@@ -409,6 +409,8 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                   score-=1.0
             if any(keyword in query_noun for keyword in ['복전','복수','복수전공']) and  any(keyword in title for keyword in ['복수']):
                 score+=0.7
+            if not any(keyword in query_noun for keyword in ['복전','복수','복수전공']) and any(keyword in title for keyword in ['복수']):
+                score-=0.7
             if any(keyword in title for keyword in ['심컴','심화컴퓨터전공','심화 컴퓨터공학','심화컴퓨터공학']):
               if any(keyword in user_question for keyword in['심컴','심화컴퓨터전공']):
                 score+=0.7
