@@ -382,11 +382,13 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                         score+=0.8
             if '군' in query_noun and '군' in title:
               if '학점' in title and '학점' not in query_noun:
-                score-=0.6
+                score-=1.0
               else:
-                score+=0.5
+                score+=1.0
+            if '복학' in query_noun and '복학' in title:
+                score+=1.0
             if '카카오' in title and '카카오' in query_noun:
-                score+=0.6
+                score+=0.7
             if '설계' in title:
                 score-=0.4
             if '오픈소스' in query_noun and '오픈소스' in title:
