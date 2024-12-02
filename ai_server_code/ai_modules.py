@@ -154,11 +154,19 @@ def transformed_query(content):
         content=content.replace('선후수','')
     if '학자금' in content:
         query_nouns.append('학자금')
-        content=content.replace('학자금','')   
+        content=content.replace('학자금','')
     if  any(keyword in content for keyword in ['오픈 소스','오픈소스']):
         query_nouns.append('오픈소스')
         content=content.replace('오픈 소스','')
-        content=content.replace('오픈소스','') 
+        content=content.replace('오픈소스','')
+    if any(keyword in content for keyword in ['군','군대']) and '휴학' in content:
+        query_nouns.append('군')
+        query_nouns.append('군휴학')
+        query_nouns.append('군입대')
+    if '카테캠' in content:
+        query_nouns.append('카카오')
+        query_nouns.append('테크')
+        query_nouns.append('캠퍼스')
     if '채용' in content and any(keyword in content for keyword in ['모집','공고']):
         if '모집' in content:
           content=content.replace('모집','')
@@ -263,36 +271,36 @@ def calculate_weight_by_days_difference(post_date, current_date, query_nouns):
     # '최근', '최신' 등의 키워드가 있는 경우, 최근 가중치를 추가
     add_recent_weight = 1.0 if any(keyword in query_nouns for keyword in ['최근', '최신', '지금', '현재']) else 0
 
-    # **10일 단위 구분**: 최근 문서에 대한 세밀한 가중치 부여
-    if days_diff<=5:
-        return 1.35 + add_recent_weight
-    elif days_diff <= 10:
-        return 1.33 + add_recent_weight/1.3
-    elif days_diff <= 15:
-        return 1.31 + add_recent_weight/1.9
-    elif days_diff <= 20:
-        return 1.29 + add_recent_weight/2.6
-    elif days_diff <= 25:
-        return 1.27 + add_recent_weight/3.1
+    # **6일 단위 구분**: 최근 문서에 대한 세밀한 가중치 부여
+    if days_diff<=6:
+        return 1.355 + add_recent_weight
+    elif days_diff <= 12:
+        return 1.333 + add_recent_weight/1.3
+    elif days_diff <= 18:
+        return 1.311 + add_recent_weight/1.9
+    elif days_diff <= 24:
+        return 1.299 + add_recent_weight/2.6
     elif days_diff <= 30:
-        return 1.25 + add_recent_weight/3.5
+        return 1.277 + add_recent_weight/3.1
+    elif days_diff <= 36:
+        return 1.255 + add_recent_weight/3.5
     elif days_diff<=  45:
-        return 1.23+ add_recent_weight/3.8
+        return 1.233+ add_recent_weight/3.8
     elif days_diff <= 60:
-        return 1.21 + add_recent_weight/4.0
+        return 1.211 + add_recent_weight/4.0
     elif days_diff <= 90:
-        return 1.20
+        return 1.200
     # **월 단위 구분**: 2개월 이후는 월 단위로 단순화
     month_diff = (days_diff - 90) // 30
     month_weight_map = {
-        0: 1.17 ,  # 2.5~3.5개월
-        1: 1.16 - add_recent_weight / 3,  # 3.5~4.5개월
-        2: 1.15 - add_recent_weight / 4,  # 4.5~5.5개월
-        3: 1.12 - add_recent_weight / 5,  # 5.5~6.5개월
-        4: 1.11 - add_recent_weight/6,
+        0: 1.15 ,  # 2.5~3.5개월
+        1: 1.12 - add_recent_weight / 3,  # 3.5~4.5개월
+        2: 1.10 - add_recent_weight / 4,  # 4.5~5.5개월
+        3: 1.09 - add_recent_weight / 5,  # 5.5~6.5개월
+        4: 1.08 - add_recent_weight/6,
     }
 
-    # 기본 가중치 반환 (6개월 이후)
+    # 기본 가중치 반환 (7.5개월 이후)
     return month_weight_map.get(month_diff, 1-add_recent_weight/5)
 
 
@@ -372,7 +380,13 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                            score+=1.5
                     else:
                         score+=0.8
-
+            if '군' in query_noun and '군' in title:
+              if '학점' in title and '학점' not in query_noun:
+                score-=0.6
+              else:
+                score+=0.5
+            if '카카오' in title and '카카오' in query_noun:
+                score+=0.4
             if '설계' in title:
                 score-=0.4
             if '오픈소스' in query_noun and '오픈소스' in title:
@@ -547,7 +561,7 @@ def best_docs(user_question):
       query_dense_vector = np.array(embeddings.embed_query(user_question))  # 사용자 질문 임베딩
 
       # Pinecone에서 텍스트에 대한 가장 유사한 벡터 20개 추출
-      pinecone_results_text = index.query(vector=query_dense_vector.tolist(), top_k=25, include_values=False, include_metadata=True)
+      pinecone_results_text = index.query(vector=query_dense_vector.tolist(), top_k=30, include_values=False, include_metadata=True)
       pinecone_similarities_text = [res['score'] for res in pinecone_results_text['matches']]
       pinecone_docs_text = [(res['metadata'].get('title', 'No Title'),
                             res['metadata'].get('date', 'No Date'),
