@@ -386,7 +386,7 @@ def last_filter_keyword(DOCS,query_noun,user_question):
               else:
                 score+=0.5
             if '카카오' in title and '카카오' in query_noun:
-                score+=0.4
+                score+=0.6
             if '설계' in title:
                 score-=0.4
             if '오픈소스' in query_noun and '오픈소스' in title:
