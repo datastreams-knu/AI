@@ -1,0 +1,68 @@
+def find_url(url, title, doc_date, text, doc_url, number):
+    return_docs = []
+    for i, urls in enumerate(doc_url):
+        if urls.startswith(url):  # indexs와 시작이 일치하는지 확인
+            return_docs.append((title[i], doc_date[i], text[i], doc_url[i]))
+    
+    # doc_url[i] 순서대로 정렬
+    return_docs.sort(key=lambda x: x[3],reverse=True) 
+
+    # 고유 숫자를 추적하며 number개의 문서 선택
+    unique_numbers = set()
+    filtered_docs = []
+
+    for doc in return_docs:
+        # 숫자가 서로 다른 number개가 모이면 종료
+        if len(unique_numbers) >= number:
+            break
+        url_number = ''.join(filter(str.isdigit, doc[3]))  # URL에서 숫자 추출
+        unique_numbers.add(url_number)
+        filtered_docs.append(doc)
+
+
+    return filtered_docs
+
+
+########################################################################################  best_docs 시작 ##########################################################################################
+
+
+def best_docs(user_question):
+      # 사용자 질문
+      okt = Okt()
+      query_noun=transformed_query(user_question)
+      if len(query_noun)==0:
+        return None,None
+      #######  최근 공지사항, 채용, 세미나, 행사, 특강의 단순한 정보를 요구하는 경우를 필터링 하기 위한 매커니즘 ########
+      remove_noticement = ['제일','가장','공고', '공지사항','필독','첨부파일','수업','컴퓨터학부','컴학','상위','정보','관련','세미나','행사','특강','강연','공지사항','채용','공고','최근','최신','지금','현재']
+      query_nouns = [noun for noun in query_noun if noun not in remove_noticement]
+      return_docs=[]
+      key=None
+      numbers=5 ## 기본으로 5개 문서 반환할 것.
+      check_num=0
+      for noun in query_nouns:
+        if '개' in noun:
+            # 숫자 추출
+            num = re.findall(r'\d+', noun)
+            if num:
+                numbers=int(num[0])
+                check_num=1
+      if (any(keyword in query_noun for keyword in ['세미나','행사','특강','강연','공지사항','채용','공고'])and any(keyword in query_noun for keyword in ['최근','최신','지금','현재'])and len(query_nouns)<1 or check_num==1):    
+        if numbers ==0:
+          #### 0개의 keyword에 대해서 질문한다면? ex) 가장 최근 공지사항 0개 알려줘######
+          keys=['세미나','행사','특강','강연','공지사항','채용']
+          return None,[keyword for keyword in keys if keyword in user_question]
+        if '공지사항' in query_noun:
+          key=['공지사항']
+          notice_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id="
+          return_docs=find_url(notice_url,title_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+        if '채용' in query_noun:
+          key=['채용']
+          company_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_3_b&wr_id="
+          return_docs=find_url(company_url,title_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+        other_key = ['세미나', '행사', '특강', '강연']
+        if any(keyword in query_noun for keyword in other_key):
+          seminar_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_4&wr_id="
+          key = [keyword for keyword in other_key if keyword in user_question]
+          return_docs=find_url(seminar_url,title_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+      if (len(return_docs)>0):
+        return return_docs,key
