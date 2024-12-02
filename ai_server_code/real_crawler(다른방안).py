@@ -244,7 +244,7 @@ document_data = extract_text_and_date_from_url(urls)
 
 # 텍스트 분리기 초기화
 class CharacterTextSplitter:
-    def __init__(self, chunk_size=1100, chunk_overlap=150):
+    def __init__(self, chunk_size=850, chunk_overlap=100):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
@@ -254,7 +254,7 @@ class CharacterTextSplitter:
             chunks.append(text[i:i + self.chunk_size])
         return chunks
 
-text_splitter = CharacterTextSplitter(chunk_size=1100, chunk_overlap=150)
+text_splitter = CharacterTextSplitter(chunk_size=850, chunk_overlap=100)
 
 ################################################################################################
 
