@@ -13,7 +13,6 @@ from langchain.prompts import PromptTemplate
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
 from langchain.schema import Document
-from langchain.vectorstores import FAISS
 import re
 from datetime import datetime
 import pytz
@@ -355,7 +354,7 @@ def last_filter_keyword(DOCS,query_noun,user_question):
         Final_best=DOCS
         # 키워드가 포함된 경우 유사도를 조정하고, 유사도 기준으로 내림차순 정렬
         for idx, doc in enumerate(DOCS):
-            score, title, date, text, url, image = doc
+            score, title, date, text, url = doc
             if not any(keyword in query_noun for keyword in["현장", "실습", "현장실습"]) and any(keyword in title for keyword in ["현장실습","대체","기준"]):
               score-=1.0
             # wr_id 뒤에 오는 숫자 추출
@@ -505,7 +504,7 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                 else:
                   score+=0.8
             # 조정된 유사도 점수를 사용하여 다시 리스트에 저장
-            Final_best[idx] = (score, title, date, text,  url, image)
+            Final_best[idx] = (score, title, date, text,  url)
             #print(Final_best[idx])
         return Final_best
 
