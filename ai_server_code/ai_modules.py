@@ -350,8 +350,6 @@ def adjust_similarity_scores(query_noun, title,texts,similarities):
             similarities[idx] *=1.45# 본문이 "No content"인 경우 유사도를 높임
         if '마일리지' in query_noun and '마일리지' in title:
             similarities[idx]+=1
-        if '신입생' in query_noun and '수강신청' in query_noun and '일괄수강신청' in title:
-            similarities[idx]+=4.0
     return similarities
 
 
@@ -380,15 +378,19 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                            score+=1.5
                     else:
                         score+=0.8
-            if '군' in query_noun and '군' in title:
+            if any(keyword in query_noun for keyword in ['군','군대']) and '군' in title:
               if '학점' in title and '학점' not in query_noun:
                 score-=1.0
               else:
-                score+=1.0
+                score+=1.5
+            if '군' not in query_noun and '군' in title:
+              score-=1.0
             if '복학' in query_noun and '복학' in title:
                 score+=1.0
+            if '휴학' in query_noun and '휴학' in title:
+                score+=1.0
             if '카카오' in title and '카카오' in query_noun:
-                score+=0.7
+                score+=0.6
             if '설계' in title:
                 score-=0.4
             if '오픈소스' in query_noun and '오픈소스' in title:
@@ -981,7 +983,7 @@ def get_ai_message(question):
 
     if False == (question_valid(question, top_docs[0][1], query_noun)):
         for i in range(len(top_docs)):
-            top_docs[i][0] -= 1
+            top_docs[i][0] -= 2
     
     final_score = top_docs[0][0]
     final_title = top_docs[0][1]
