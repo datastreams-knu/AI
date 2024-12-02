@@ -786,7 +786,7 @@ def best_docs(user_question):
                   new_sorted_cluster.append(new_doc)
           for i in range(count-1):
             fix_similar=list(new_sorted_cluster[i])
-            fix_similar[0]=fix_similar[0]+0.3*count
+            fix_similar[0]=fix_similar[0]+0.2*count
             new_sorted_cluster[i]=tuple(fix_similar)
           # sorted_cluster에서 new_sorted_cluster에 없는 제목만 추가
           for doc in sorted_cluster:
