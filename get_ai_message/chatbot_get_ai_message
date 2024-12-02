@@ -1,0 +1,109 @@
+def get_ai_message(question):
+    top_doc, query_noun = best_docs(question)  # 가장 유사한 문서 가져오기
+
+    if len(query_noun)==1 and any(keyword in query_noun for keyword in ['채용','공지사항','세미나','행사','강연','특강']):
+      seen_urls = set()  # 이미 본 URL을 추적하기 위한 집합
+      response = f"'{query_noun[0]}'에 대한 정보 목록입니다:\n\n"
+      show_url=""
+      if top_doc !=None:
+        for title, date, _, url in top_doc:  # top_doc에서 제목, 날짜, URL 추출
+            if url not in seen_urls:
+                response += f"제목: {title}, 날짜: {date} \n--------------------------------------------------------------------------------------------------------------------------------------\n"
+                seen_urls.add(url)  # URL 추가하여 중복 방지
+      if '채용' in query_noun:
+        show_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_3_b&wr_id="
+      elif '공지사항' in query_noun:
+        show_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id="         
+      else:
+        show_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_4&wr_id="
+
+      # 최종 data 구조 생성
+      data = {
+        "answer": response,
+        "references": show_url,  # show_url을 넘기기
+        "disclaimer": "\n\n항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL을 참고하여 정확하고 자세한 정보를 확인하세요.",
+        "images": ["No content"]
+      }
+
+      return data
+      
+    top_docs = [list(doc) for doc in top_doc]
+
+    if False == (question_valid(question, top_docs[0][1], query_noun)):
+        for i in range(len(top_docs)):
+            top_docs[i][0] -= 1
+    
+    final_score = top_docs[0][0]
+    final_title = top_docs[0][1]
+    final_date = top_docs[0][2]
+    final_text = top_docs[0][3]
+    final_url = top_docs[0][4]
+    final_image = []
+
+    record = collection.find_one({"title" : final_title})
+    if record :
+        if(isinstance(record["image_url"], list)):
+          final_image.extend(record["image_url"])
+        else :
+          final_image.append(record["image_url"])
+
+    # top_docs 인덱스 구성
+    # 0: 유사도, 1: 제목, 2: 날짜, 3: 본문내용, 4: url, 5: 이미지url
+
+    if final_image[0] != "No content" and final_text == "No content" and final_score > 1.8:
+        # JSON 형식으로 반환할 객체 생성
+        only_image_response = {
+            "answer": None,
+            "references": final_url,
+            "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
+            "images": final_image
+        }
+        return only_image_response
+
+    # 이미지 + LLM 답변이 있는 경우.
+    else:
+        qa_chain, relevant_docs = get_answer_from_chain(top_docs, question,query_noun)
+
+
+        # 공지사항에 존재하지 않을 경우
+        notice_url = "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1"
+        not_in_notices_response = {
+            "answer": "해당 질문은 공지사항에 없는 내용입니다.\n 자세한 사항은 공지사항을 살펴봐주세요.",
+            "references": notice_url,
+            "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
+            "images": ["No content"]
+        }
+
+        # 답변 생성 실패
+        if not qa_chain or not relevant_docs:
+            if final_image[0] != "No content" and final_score > 1.8:
+                data = {
+                    "answer": "해당 질문에 대한 내용은 이미지 파일로 확인해주세요.",
+                    "references": final_url,
+                    "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
+                    "images": final_image
+                }
+                return data
+            else:
+                return not_in_notices_response
+
+        # 유사도가 낮은 경우
+        if final_score < 1.8:
+            return not_in_notices_response
+
+        # LLM에서 답변을 생성하는 경우
+        answer_result = qa_chain.invoke(question)
+        doc_references = "\n".join([
+            f"\n참고 문서 URL: {doc.metadata['url']}"
+            for doc in relevant_docs[:1] if doc.metadata.get('url') != 'No URL'
+        ])
+
+        # JSON 형식으로 반환할 객체 생성
+        data = {
+            "answer": answer_result,
+            "references": doc_references,
+            "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
+            "images": final_image
+        }
+
+        return data
