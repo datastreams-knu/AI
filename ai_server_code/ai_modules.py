@@ -787,10 +787,7 @@ def best_docs(user_question):
 
           return clusters
 
- # Step 1: Adjust similarity scores based on the presence of query_noun
-
-
-      # Step 2: Cluster documents by similarity
+      # Step 1: Cluster documents by similarity
       clusters = cluster_documents_by_similarity(final_best_docs)
       query_nouns=transformed_query(user_question)
       # print(clusters[0])
@@ -800,7 +797,7 @@ def best_docs(user_question):
           # '작성일'을 제거하고 공백을 제거한 뒤 날짜 형식으로 변환
           clean_date_str = date_str.replace("작성일", "").strip()
           return datetime.strptime(clean_date_str, "%y-%m-%d %H:%M")
-      # Step 3: Compare cluster[0] cluster[1] top similarity and check condition
+      # Step 2: Compare cluster[0] cluster[1] top similarity and check condition
       top_0_cluster_similar=clusters[0][0][0]
       top_1_cluster_similar=clusters[1][0][0]
       keywords = ["최근", "최신", "현재", "지금"]
@@ -944,7 +941,6 @@ PROMPT = PromptTemplate(
     input_variables=["current_time", "context", "question"]
 )
 
-
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
@@ -970,15 +966,14 @@ def get_answer_from_chain(best_docs, user_question,query_noun):
         Document(page_content=text, metadata={"title": title, "url": url, "doc_date": datetime.strptime(date, '작성일%y-%m-%d %H:%M')})
         for title, text, url, date in zip(doc_titles, doc_texts, doc_urls, doc_dates)
     ]
-    # 키워드 기반 관련성 필터링 추가 (질문과 관련 없는 문서 제거)
-    # 사용자 질문을 전처리하여 공백 제거 후 명사만 추출
+
     relevant_docs = [doc for doc in documents if any(keyword in doc.page_content for keyword in query_noun)]
     if not relevant_docs:
       return None, None
 
     llm = ChatUpstage(api_key=upstage_api_key)
     relevant_docs_content=format_docs(relevant_docs)
-    # PromptTemplate 인스턴스 사용
+    
     qa_chain = (
         {
             "current_time": lambda _: get_korean_time().strftime("%Y년 %m월 %d일 %H시 %M분"),
@@ -990,7 +985,7 @@ def get_answer_from_chain(best_docs, user_question,query_noun):
         | StrOutputParser()
     )
 
-    return qa_chain,relevant_docs  # retriever를 반환
+    return qa_chain,relevant_docs
 
 
 
@@ -1124,7 +1119,7 @@ def get_ai_message(question):
         final_date = "No content"
         final_text = "No content"
         final_url = "No URL"
-        final_image = "No content"
+        final_image = ["No content"]
 
     # top_docs 인덱스 구성
     # 0: 유사도, 1: 제목, 2: 날짜, 3: 본문내용, 4: url, 5: 이미지url
