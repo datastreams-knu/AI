@@ -586,6 +586,7 @@ def best_docs(user_question):
       # 사용자 질문
       okt = Okt()
       query_noun=transformed_query(user_question)
+      titles_from_pinecone, texts_from_pinecone, urls_from_pinecone, dates_from_pinecone = fetch_titles_from_pinecone()
       if len(query_noun)==0:
         return None,None
       #######  최근 공지사항, 채용, 세미나, 행사, 특강의 단순한 정보를 요구하는 경우를 필터링 하기 위한 매커니즘 ########
@@ -610,16 +611,16 @@ def best_docs(user_question):
         if '공지사항' in query_noun:
           key=['공지사항']
           notice_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id="
-          return_docs=find_url(notice_url,title_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+          return_docs=find_url(notice_url,titles_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
         if '채용' in query_noun:
           key=['채용']
           company_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_3_b&wr_id="
-          return_docs=find_url(company_url,title_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+          return_docs=find_url(company_url,titles_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
         other_key = ['세미나', '행사', '특강', '강연']
         if any(keyword in query_noun for keyword in other_key):
           seminar_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_4&wr_id="
           key = [keyword for keyword in other_key if keyword in user_question]
-          return_docs=find_url(seminar_url,title_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+          return_docs=find_url(seminar_url,titles_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
       if (len(return_docs)>0):
         return return_docs,key
 
@@ -627,7 +628,7 @@ def best_docs(user_question):
       remove_noticement = ['제일','가장','공고', '공지사항','필독','첨부파일','수업','컴학','상위','관련']
       query_noun = transformed_query(user_question)  # 명사화된 user query
 
-      titles_from_pinecone, texts_from_pinecone, urls_from_pinecone, dates_from_pinecone = fetch_titles_from_pinecone()
+
       tokenized_titles = [transformed_query(title) for title in titles_from_pinecone]
 
       # 기존과 동일한 파라미터를 사용하고 있는지 확인
