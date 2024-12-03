@@ -1216,6 +1216,15 @@ def get_ai_message(question):
             print(f"get_ai_message 총 돌아가는 시간 : {f_time}")
             return data
 
+        if final_url in ["https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&lang=kor", "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor", "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5&lang=kor",] and not any(keyword in final_title for keyword in query_noun):
+            data = {
+                "answer": "존재하지 않는 교수님 정보입니다. 자세한 정보는 교수진 페이지를 참고하세요.",
+                "references": final_url,
+                "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
+                "images": ["No content"]
+            }
+            return data
+
         # 공지사항에 존재하지 않을 경우
         notice_url = "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1"
         not_in_notices_response = {
