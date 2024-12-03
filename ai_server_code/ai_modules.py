@@ -630,7 +630,10 @@ def find_url(url, title, doc_date, text, doc_url, number):
 def best_docs(user_question):
       # 사용자 질문
       okt = Okt()
+      noun_time=time.time()
       query_noun=transformed_query(user_question)
+      query_noun_time=time.time()-noun_time
+      print(f"명사화 변환 시간 : {query_noun_time}")
       titles_from_pinecone, texts_from_pinecone, urls_from_pinecone, dates_from_pinecone = cached_titles, cached_texts, cached_urls, cached_dates
       if len(query_noun)==0:
         return None,None
@@ -641,6 +644,7 @@ def best_docs(user_question):
       key=None
       numbers=5 ## 기본으로 5개 문서 반환할 것.
       check_num=0
+      recent_time=time.time()
       for noun in query_nouns:
         if '개' in noun:
             # 숫자 추출
@@ -666,14 +670,15 @@ def best_docs(user_question):
           seminar_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_4&wr_id="
           key = [keyword for keyword in other_key if keyword in user_question]
           return_docs=find_url(seminar_url,titles_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
-      if (len(return_docs)>0):
+    recent_finish_time=time.time()-recent_time
+    print(f"최근 공지사항 문서 뽑는 시간 {recent_finish_time}")
+    if (len(return_docs)>0):
         return return_docs,key
 
 
       remove_noticement = ['제일','가장','공고', '공지사항','필독','첨부파일','수업','컴학','상위','관련']
-      query_noun = transformed_query(user_question)  # 명사화된 user query
 
-
+      bm_title_time=time.time()
       tokenized_titles = [transformed_query(title) for title in titles_from_pinecone]
 
       # 기존과 동일한 파라미터를 사용하고 있는지 확인
@@ -681,7 +686,7 @@ def best_docs(user_question):
 
       title_question_similarities = bm25_titles.get_scores(query_noun)  # 제목과 사용자 질문 간의 유사도
       title_question_similarities /= 24
-
+      
 
       adjusted_similarities = adjust_similarity_scores(query_noun, titles_from_pinecone,texts_from_pinecone, title_question_similarities)
       # 유사도 기준 상위 15개 문서 선택
@@ -696,9 +701,10 @@ def best_docs(user_question):
       #     print("-" * 50)
 
       Bm25_best_docs = [(titles_from_pinecone[i], dates_from_pinecone[i], texts_from_pinecone[i], urls_from_pinecone[i]) for i in top_20_titles_idx]
-
+      bm_title_f_time=time.time()-bm_title_time
+      print(f"bm25 문서 뽑는시간: {bm_title_f_time}")
       ####################################################################################################
-
+      dense_time=time.time()
       # 1. Dense Retrieval - Text 임베딩 기반 20개 문서 추출
       query_dense_vector = np.array(embeddings.embed_query(user_question))  # 사용자 질문 임베딩
 
@@ -711,7 +717,8 @@ def best_docs(user_question):
                             res['metadata'].get('url', 'No URL')) for res in pinecone_results_text['matches']]
 
      
-
+     pinecone_time=time.time()-dense_time
+     print(f"파인콘에서 top k 뽑는데 걸리는 시간 {pinecone_time}")
 
       #####파인콘으로 구한  문서 추출 방식 결합하기.
       combine_dense_docs = []
@@ -751,7 +758,7 @@ def best_docs(user_question):
 
       # combine_dense_doc는 (유사도, 제목, 본문 내용, 날짜, URL) 형식으로 데이터를 저장합니다.
       combine_dense_doc = []
-
+      combine_time=time.time()
       # combine_dense_docs의 내부 구조에 맞게 두 단계로 분해
       for score, (title, date, text, url) in combine_dense_docs:
           combine_dense_doc.append((score, title, text, date, url))
@@ -798,7 +805,8 @@ def best_docs(user_question):
       
       final_best_docs=last_filter_keyword(final_best_docs,query_noun,user_question)
       final_best_docs.sort(key=lambda x: x[0], reverse=True)
-
+      combine_f_time=time.time()-combine_time
+      print(f"Bm25랑 pinecone 결합 시간: {combine_f_time}")
       # print("\n\n\n\n중간필터 최종문서 (유사도 큰 순):")
       # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(final_best_docs):
       #     print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor},본문 {len(tex)} 날짜: {dat}, URL: {ur}")
@@ -833,6 +841,7 @@ def best_docs(user_question):
           return clusters
 
       # Step 1: Cluster documents by similarity
+      cluster_time=time.time()
       clusters = cluster_documents_by_similarity(final_best_docs)
       query_nouns=transformed_query(user_question)
       # print(clusters[0])
@@ -915,7 +924,8 @@ def best_docs(user_question):
             #print("진짜 유사도순대로")
             result_docs=clusters[0]
             sorted_cluster = sorted(clusters[0], key=lambda doc: doc[0], reverse=True)
-
+      cluster_f_time=time.time()-cluster_time
+      print(f"cluster로 문서 추출하는 시간:{cluster_f_time}")
       # print("\n\n\n\nadd_similar넣기전 상위 문서 (유사도 및 날짜 기준 정렬):")
       # for idx, (scor, titl, dat, tex, ur, image_ur) in enumerate(sorted_cluster):
       #     print(f"순위 {idx+1}: 제목: {titl}, 유사도: {scor}, 날짜: {dat}, URL: {ur} 내용: {len(tex)}   이미지{len(image_ur)}")
@@ -1114,8 +1124,11 @@ def question_valid(question, top_docs, query_noun):
 ##### 유사도 제목 날짜 본문  url image_url순으로 저장됨
 @measure_time
 def get_ai_message(question):
+    s_time=time.time()
+    best_time=time.time()
     top_doc, query_noun = best_docs(question)  # 가장 유사한 문서 가져오기
-
+    best_f_time=time.time()-best_time
+    print(f"best_docs 뽑는 시간:{best_f_time}")
     if len(query_noun)==1 and any(keyword in query_noun for keyword in ['채용','공지사항','세미나','행사','강연','특강']):
       seen_urls = set()  # 이미 본 URL을 추적하기 위한 집합
       response = f"'{query_noun[0]}'에 대한 정보 목록입니다:\n\n"
@@ -1139,10 +1152,11 @@ def get_ai_message(question):
         "disclaimer": "\n\n항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL을 참고하여 정확하고 자세한 정보를 확인하세요.",
         "images": ["No content"]
       }
-
+      f_time=time.time()-s_time
+      print(f"get_ai_message 총 돌아가는 시간 : {f_time}")
       return data
     top_docs = [list(doc) for doc in top_doc]
-
+    valid_time=time.time()
     if False == (question_valid(question, top_docs[0][1], query_noun)):
         for i in range(len(top_docs)):
             top_docs[i][0] -= 2
@@ -1168,7 +1182,8 @@ def get_ai_message(question):
         final_text = "No content"
         final_url = "No URL"
         final_image = ["No content"]
-
+    valid_f_time=time.time()-valid_time
+    print(f"질문 적합도 체크하는 시간: {valid_f_time}")
     # top_docs 인덱스 구성
     # 0: 유사도, 1: 제목, 2: 날짜, 3: 본문내용, 4: url, 5: 이미지url
 
@@ -1180,12 +1195,16 @@ def get_ai_message(question):
             "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
             "images": final_image
         }
+        f_time=time.time()-s_time
+        print(f"get_ai_message 총 돌아가는 시간 : {f_time}")
         return only_image_response
 
     # 이미지 + LLM 답변이 있는 경우.
     else:
+        chain_time=time.time()
         qa_chain, relevant_docs = get_answer_from_chain(top_docs, question,query_noun)
-
+        chain_f_time=time.time()-chain_time
+        print(f"chain 생성하는 시간: {chain_f_time}")
         if final_url == "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor" and any(keyword in query_noun for keyword in ['연락처', '전화', '번호', '전화번호']):
             data = {
                 "answer": "해당 교수님은 연락처 정보가 포함되어 있지 않습니다.\n 자세한 정보는 교수진 페이지를 참고하세요.",
@@ -1193,6 +1212,8 @@ def get_ai_message(question):
                 "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
                 "images": final_image
             }
+            f_time=time.time()-s_time
+            print(f"get_ai_message 총 돌아가는 시간 : {f_time}")
             return data
 
         # 공지사항에 존재하지 않을 경우
@@ -1213,16 +1234,25 @@ def get_ai_message(question):
                     "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
                     "images": final_image
                 }
+                f_time=time.time()-s_time
+                print(f"get_ai_message 총 돌아가는 시간 : {f_time}")
                 return data
             else:
+                f_time=time.time()-s_time
+                print(f"get_ai_message 총 돌아가는 시간 : {f_time}")
                 return not_in_notices_response
 
         # 유사도가 낮은 경우
         if final_score < 1.8:
+            f_time=time.time()-s_time
+            print(f"get_ai_message 총 돌아가는 시간 : {f_time}")
             return not_in_notices_response
 
         # LLM에서 답변을 생성하는 경우
+        answer_time=time.time()
         answer_result = qa_chain.invoke(question)
+        answer_f_time=time.time()-answer_time
+        print(f"답변 생성하는 시간: {answer_f_time}")
         doc_references = "\n".join([
             f"\n참고 문서 URL: {doc.metadata['url']}"
             for doc in relevant_docs[:1] if doc.metadata.get('url') != 'No URL'
@@ -1235,5 +1265,6 @@ def get_ai_message(question):
             "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
             "images": final_image
         }
-
+        f_time=time.time()-s_time
+        print(f"get_ai_message 총 돌아가는 시간 : {f_time}")
         return data
