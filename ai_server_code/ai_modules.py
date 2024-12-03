@@ -33,6 +33,9 @@ from pymongo import MongoClient
 from pinecone import Index
 import redis
 import pickle
+#시간 측정용
+import time
+import logging
 
 # Pinecone API 키와 인덱스 이름 선언
 pinecone_api_key = 'cd22a6ee-0b74-4e9d-af1b-a1e83917d39e'
@@ -55,7 +58,25 @@ collection = db["notice_collection"]
 #redis client 연결 ( 외부 캐시 저장소 )
 redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 
+# 로깅 설정
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def measure_time(func):
+    """
+    데코레이터: 함수 실행 시간을 측정합니다.
+    """
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        logging.info(f"Starting function: {func.__name__}")
+        result = func(*args, **kwargs)
+        elapsed_time = time.time() - start_time
+        logging.info(f"Finished function: {func.__name__} in {elapsed_time:.2f} seconds")
+        return result
+    return wrapper
+
+
 # 단어 명사화 함수.
+@measure_time
 def transformed_query(content):
     # 중복된 단어를 제거한 명사를 담을 리스트
     query_nouns = []
@@ -237,7 +258,7 @@ embeddings = UpstageEmbeddings(
 ) # Upstage API 키 사용
 # dense_doc_vectors = np.array(embeddings.embed_documents(texts))  # 문서 임베딩
 
-
+@measure_time
 def fetch_titles_from_pinecone():
     # 메타데이터 기반 검색을 위한 임의 쿼리
     query_results = index.query(
@@ -256,6 +277,7 @@ def fetch_titles_from_pinecone():
 
 
 # 캐싱 데이터 초기화 함수
+@measure_time
 def initialize_cache():
     global cached_titles, cached_texts, cached_urls, cached_dates
 
@@ -275,6 +297,7 @@ def initialize_cache():
 ######################################################################################################################
 
 # 날짜를 파싱하는 함수
+@measure_time
 def parse_date_change_korea_time(date_str):
     clean_date_str = date_str.replace("작성일", "").strip()
     naive_date = datetime.strptime(clean_date_str, "%y-%m-%d %H:%M")
@@ -282,7 +305,7 @@ def parse_date_change_korea_time(date_str):
     korea_timezone = pytz.timezone('Asia/Seoul')
     return korea_timezone.localize(naive_date)
 
-
+@measure_time
 def calculate_weight_by_days_difference(post_date, current_date, query_nouns):
 
     # 날짜 차이 계산 (일 단위)
@@ -333,6 +356,7 @@ def calculate_weight_by_days_difference(post_date, current_date, query_nouns):
 
 
 # 유사도를 조정하는 함수
+@measure_time
 def adjust_date_similarity(similarity, date_str,query_nouns):
     # 현재 한국 시간
     current_time = get_korean_time()
@@ -344,6 +368,7 @@ def adjust_date_similarity(similarity, date_str,query_nouns):
     return similarity * weight
 
 # 사용자 질문에서 추출한 명사와 각 문서 제목에 대한 유사도를 조정하는 함수
+@measure_time
 def adjust_similarity_scores(query_noun, title,texts,similarities):
 
     for idx, titl in enumerate(title):
@@ -382,7 +407,7 @@ def adjust_similarity_scores(query_noun, title,texts,similarities):
 
 
 #############################################################################################
-
+@measure_time
 def last_filter_keyword(DOCS,query_noun,user_question):
         # 필터링에 사용할 키워드 리스트
         Final_best=DOCS
@@ -573,6 +598,7 @@ def last_filter_keyword(DOCS,query_noun,user_question):
         return Final_best
 
 #################################################################################################
+@measure_time
 def find_url(url, title, doc_date, text, doc_url, number):
     return_docs = []
     for i, urls in enumerate(doc_url):
@@ -600,7 +626,7 @@ def find_url(url, title, doc_date, text, doc_url, number):
 
 ########################################################################################  best_docs 시작 ##########################################################################################
 
-
+@measure_time
 def best_docs(user_question):
       # 사용자 질문
       okt = Okt()
@@ -963,6 +989,7 @@ PROMPT = PromptTemplate(
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
+@measure_time
 def get_answer_from_chain(best_docs, user_question,query_noun):
 
     documents = []
@@ -1009,6 +1036,7 @@ def get_answer_from_chain(best_docs, user_question,query_noun):
 
 
 #######################################################################
+@measure_time
 def question_valid(question, top_docs, query_noun):
     prompt = f"""
 아래의 질문에 대해, 주어진 기준을 바탕으로 "예" 또는 "아니오"로 판단해주세요. 각 질문에 대해 학사 관련 여부를 명확히 판단하고, 경북대학교 컴퓨터학부 홈페이지에서 제공하지 않는 정보는 "아니오"로, 제공되는 경우에는 "예"로 답변해야 합니다."
@@ -1084,6 +1112,7 @@ def question_valid(question, top_docs, query_noun):
 #######################################################################
 
 ##### 유사도 제목 날짜 본문  url image_url순으로 저장됨
+@measure_time
 def get_ai_message(question):
     top_doc, query_noun = best_docs(question)  # 가장 유사한 문서 가져오기
 
