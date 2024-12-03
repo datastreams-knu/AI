@@ -167,6 +167,12 @@ def transformed_query(content):
         query_nouns.append('카카오')
         query_nouns.append('테크')
         query_nouns.append('캠퍼스')
+    if '재이수' in content:
+        query_nouns.append('재이수')
+    if '과목' in content:
+        query_nouns.append('강의')
+    if '수꾸' in content:
+        query_nouns.append('수강꾸러미')
     if '채용' in content and any(keyword in content for keyword in ['모집','공고']):
         if '모집' in content:
           content=content.replace('모집','')
@@ -211,6 +217,9 @@ def transformed_query(content):
                   if keyword in query_nouns:
                     query_nouns.remove(keyword)
     # 최종 명사 리스트에서 중복된 단어 제거
+    if '꾸러미' in content and '수강신청' in query_nouns:
+      query_nouns.append('신청')
+
     query_nouns = list(set(query_nouns))
     return query_nouns
 
@@ -377,7 +386,20 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                         else:
                            score+=1.5
                     else:
-                        score+=0.8
+                        if '폐강' not in query_noun:
+                          score+=0.8
+            if '수강' in title:
+              if url=="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=28180":
+                score-=3.0
+              if any(keyword in query_noun for keyword in ['폐강','재이수']):
+                if '폐강' in query_noun and any(keyword in title for keyword in ['신청', '정정']):
+                  score+=2.0
+                else:
+                  score+=0.8  
+                if '재이수' in query_noun:
+                  score+=2.0
+            if '설문' not in query_noun and '설문' in title:
+                score-=0.5
             if any(keyword in query_noun for keyword in ['군','군대']) and '군' in title:
               if '학점' in title and '학점' not in query_noun:
                 score-=1.0
@@ -406,11 +428,14 @@ def last_filter_keyword(DOCS,query_noun,user_question):
             if '겨울' in query_noun and any(keyword in title for keyword in['하계',"여름"]):
                 score-=1.0
             if '여름' in query_noun and any(keyword in title for keyword in['하계',"여름"]):
-                score+=1.5
+                score+=0.4
             if '겨울' in query_noun and any(keyword in title for keyword in['겨울',"동계"]):
-                score+=1.5
-            if '변경' in query_noun and '변경' in title:
-                score+=1.0
+                score+=0.4
+            if '변경' in query_noun and '변경' in text:
+                if '변경' in title:
+                  score+=0.8
+                else:
+                  score+=0.5
             if '1학기' in query_noun and '1학기' in title:
                 score+=1.0
             if '2학기' in query_noun and '2학기' in title:
@@ -529,9 +554,76 @@ def last_filter_keyword(DOCS,query_noun,user_question):
         return Final_best
 
 #################################################################################################
+def find_url(url, title, doc_date, text, doc_url, number):
+    return_docs = []
+    for i, urls in enumerate(doc_url):
+        if urls.startswith(url):  # indexs와 시작이 일치하는지 확인
+            return_docs.append((title[i], doc_date[i], text[i], doc_url[i]))
+    
+    # doc_url[i] 순서대로 정렬
+    return_docs.sort(key=lambda x: x[3],reverse=True) 
+
+    # 고유 숫자를 추적하며 number개의 문서 선택
+    unique_numbers = set()
+    filtered_docs = []
+
+    for doc in return_docs:
+        # 숫자가 서로 다른 number개가 모이면 종료
+        if len(unique_numbers) >= number:
+            break
+        url_number = ''.join(filter(str.isdigit, doc[3]))  # URL에서 숫자 추출
+        unique_numbers.add(url_number)
+        filtered_docs.append(doc)
+
+
+    return filtered_docs
+
+
+########################################################################################  best_docs 시작 ##########################################################################################
+
 
 def best_docs(user_question):
+      # 사용자 질문
       okt = Okt()
+      query_noun=transformed_query(user_question)
+      if len(query_noun)==0:
+        return None,None
+      #######  최근 공지사항, 채용, 세미나, 행사, 특강의 단순한 정보를 요구하는 경우를 필터링 하기 위한 매커니즘 ########
+      remove_noticement = ['제일','가장','공고', '공지사항','필독','첨부파일','수업','컴퓨터학부','컴학','상위','정보','관련','세미나','행사','특강','강연','공지사항','채용','공고','최근','최신','지금','현재']
+      query_nouns = [noun for noun in query_noun if noun not in remove_noticement]
+      return_docs=[]
+      key=None
+      numbers=5 ## 기본으로 5개 문서 반환할 것.
+      check_num=0
+      for noun in query_nouns:
+        if '개' in noun:
+            # 숫자 추출
+            num = re.findall(r'\d+', noun)
+            if num:
+                numbers=int(num[0])
+                check_num=1
+      if (any(keyword in query_noun for keyword in ['세미나','행사','특강','강연','공지사항','채용','공고'])and any(keyword in query_noun for keyword in ['최근','최신','지금','현재'])and len(query_nouns)<1 or check_num==1):    
+        if numbers ==0:
+          #### 0개의 keyword에 대해서 질문한다면? ex) 가장 최근 공지사항 0개 알려줘######
+          keys=['세미나','행사','특강','강연','공지사항','채용']
+          return None,[keyword for keyword in keys if keyword in user_question]
+        if '공지사항' in query_noun:
+          key=['공지사항']
+          notice_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id="
+          return_docs=find_url(notice_url,title_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+        if '채용' in query_noun:
+          key=['채용']
+          company_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_3_b&wr_id="
+          return_docs=find_url(company_url,title_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+        other_key = ['세미나', '행사', '특강', '강연']
+        if any(keyword in query_noun for keyword in other_key):
+          seminar_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_4&wr_id="
+          key = [keyword for keyword in other_key if keyword in user_question]
+          return_docs=find_url(seminar_url,title_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+      if (len(return_docs)>0):
+        return return_docs,key
+
+
       remove_noticement = ['제일','가장','공고', '공지사항','필독','첨부파일','수업','컴학','상위','관련']
       query_noun = transformed_query(user_question)  # 명사화된 user query
 
@@ -979,6 +1071,32 @@ def question_valid(question, top_docs, query_noun):
 ##### 유사도 제목 날짜 본문  url image_url순으로 저장됨
 def get_ai_message(question):
     top_doc, query_noun = best_docs(question)  # 가장 유사한 문서 가져오기
+
+    if len(query_noun)==1 and any(keyword in query_noun for keyword in ['채용','공지사항','세미나','행사','강연','특강']):
+      seen_urls = set()  # 이미 본 URL을 추적하기 위한 집합
+      response = f"'{query_noun[0]}'에 대한 정보 목록입니다:\n\n"
+      show_url=""
+      if top_doc !=None:
+        for title, date, _, url in top_doc:  # top_doc에서 제목, 날짜, URL 추출
+            if url not in seen_urls:
+                response += f"제목: {title}, 날짜: {date} \n--------------------------------------------------------------------------------------------------------------------------------------\n"
+                seen_urls.add(url)  # URL 추가하여 중복 방지
+      if '채용' in query_noun:
+        show_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_3_b&wr_id="
+      elif '공지사항' in query_noun:
+        show_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id="         
+      else:
+        show_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_4&wr_id="
+
+      # 최종 data 구조 생성
+      data = {
+        "answer": response,
+        "references": show_url,  # show_url을 넘기기
+        "disclaimer": "\n\n항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL을 참고하여 정확하고 자세한 정보를 확인하세요.",
+        "images": ["No content"]
+      }
+
+      return data
     top_docs = [list(doc) for doc in top_doc]
 
     if False == (question_valid(question, top_docs[0][1], query_noun)):
