@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from ai_modules import get_ai_message
+from ai_modules import get_ai_message, initialize_cache
 import logging
 
 app = Flask(__name__)
@@ -28,3 +28,7 @@ def ai_response():
     except Exception as e:
         app.logger.error(f"Unexpected error: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+# 서버 실행시 캐시 초기화.
+if __name__ != "__main__":
+    initialize_cache()

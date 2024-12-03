@@ -31,6 +31,8 @@ from rank_bm25 import BM25Okapi
 from difflib import SequenceMatcher
 from pymongo import MongoClient
 from pinecone import Index
+import redis
+import pickle
 
 # Pinecone API 키와 인덱스 이름 선언
 pinecone_api_key = 'cd22a6ee-0b74-4e9d-af1b-a1e83917d39e'
@@ -50,6 +52,8 @@ client = MongoClient("mongodb://localhost:27017/")
 db = client["knu_chatbot"]
 collection = db["notice_collection"]
 
+#redis client 연결 ( 외부 캐시 저장소 )
+redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 
 # 단어 명사화 함수.
 def transformed_query(content):
@@ -251,6 +255,21 @@ def fetch_titles_from_pinecone():
     return titles, texts, urls, dates
 
 
+# 캐싱 데이터 초기화 함수
+def initialize_cache():
+    global cached_titles, cached_texts, cached_urls, cached_dates
+
+    # Redis에서 캐시 데이터 읽기
+    cached_data = redis_client.get('pinecone_metadata')
+    if cached_data:
+        # Redis에서 데이터를 로드 (역직렬화)
+        cached_titles, cached_texts, cached_urls, cached_dates = pickle.loads(cached_data)
+    else:
+        # Redis에 데이터가 없으면 Pinecone에서 가져와 저장
+        cached_titles, cached_texts, cached_urls, cached_dates = fetch_titles_from_pinecone()
+
+        # 데이터를 Redis에 저장 (직렬화)
+        redis_client.set('pinecone_metadata', pickle.dumps((cached_titles, cached_texts, cached_urls, cached_dates)))
 
                     #################################   24.11.16기준 정확도 측정완료 #####################################################
 ######################################################################################################################
@@ -586,7 +605,7 @@ def best_docs(user_question):
       # 사용자 질문
       okt = Okt()
       query_noun=transformed_query(user_question)
-      titles_from_pinecone, texts_from_pinecone, urls_from_pinecone, dates_from_pinecone = fetch_titles_from_pinecone()
+      titles_from_pinecone, texts_from_pinecone, urls_from_pinecone, dates_from_pinecone = cached_titles, cached_texts, cached_urls, cached_dates
       if len(query_noun)==0:
         return None,None
       #######  최근 공지사항, 채용, 세미나, 행사, 특강의 단순한 정보를 요구하는 경우를 필터링 하기 위한 매커니즘 ########
