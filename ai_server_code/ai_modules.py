@@ -660,16 +660,16 @@ def best_docs(user_question):
         if '공지사항' in query_noun:
           key=['공지사항']
           notice_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id="
-          return_docs=find_url(notice_url,titles_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+          return_docs=find_url(notice_url,titles_from_pinecone,dates_from_pinecone,texts_from_pinecone,urls_from_pinecone,numbers)
         if '채용' in query_noun:
           key=['채용']
           company_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_3_b&wr_id="
-          return_docs=find_url(company_url,titles_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+          return_docs=find_url(company_url,titles_from_pinecone,dates_from_pinecone,texts_from_pinecone,urls_from_pinecone,numbers)
         other_key = ['세미나', '행사', '특강', '강연']
         if any(keyword in query_noun for keyword in other_key):
           seminar_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_4&wr_id="
           key = [keyword for keyword in other_key if keyword in user_question]
-          return_docs=find_url(seminar_url,titles_from_pinecone,dates_from_pinecone,texts_from_pinecone,doc_urls_from_pinecone,numbers)
+          return_docs=find_url(seminar_url,titles_from_pinecone,dates_from_pinecone,texts_from_pinecone,urls_from_pinecone,numbers)
     recent_finish_time=time.time()-recent_time
     print(f"최근 공지사항 문서 뽑는 시간 {recent_finish_time}")
     if (len(return_docs)>0):
