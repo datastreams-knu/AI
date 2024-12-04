@@ -38,8 +38,10 @@ import time
 import logging
 
 # Pinecone API 키와 인덱스 이름 선언
-pinecone_api_key = 'cd22a6ee-0b74-4e9d-af1b-a1e83917d39e'
-index_name = 'db1'
+#pinecone_api_key = 'cd22a6ee-0b74-4e9d-af1b-a1e83917d39e'
+#index_name = 'db1'
+pinecone_api_key = 'pcsk_3pp5QX_EeyfanpYE8u1G2hKkyLnfhWQMUHvdbUJeBZdULHaFMV5j67XDQwqXDUCBtFLYpt'
+index_name = 'info'
 # Upstage API 키 선언
 upstage_api_key = 'up_pGRnryI1JnrxChGycZmswEZm934Tf'
 
