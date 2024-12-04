@@ -43,7 +43,7 @@ import logging
 pinecone_api_key = 'pcsk_3pp5QX_EeyfanpYE8u1G2hKkyLnfhWQMUHvdbUJeBZdULHaFMV5j67XDQwqXDUCBtFLYpt'
 index_name = 'info'
 # Upstage API 키 선언
-upstage_api_key = 'up_pGRnryI1JnrxChGycZmswEZm934Tf'
+upstage_api_key = 'up_6hq78Et2phdvQWCMQLccIVpWJDF5R' 
 
 # Pinecone API 설정 및 초기화
 pc = Pinecone(api_key=pinecone_api_key)
