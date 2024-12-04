@@ -717,8 +717,8 @@ def best_docs(user_question):
                             res['metadata'].get('url', 'No URL')) for res in pinecone_results_text['matches']]
 
      
-     pinecone_time=time.time()-dense_time
-     print(f"파인콘에서 top k 뽑는데 걸리는 시간 {pinecone_time}")
+      pinecone_time=time.time()-dense_time
+      print(f"파인콘에서 top k 뽑는데 걸리는 시간 {pinecone_time}")
 
       #####파인콘으로 구한  문서 추출 방식 결합하기.
       combine_dense_docs = []
