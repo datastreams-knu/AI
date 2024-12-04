@@ -1119,7 +1119,7 @@ def get_ai_message(question):
       if top_doc !=None:
         for title, date, _, url in top_doc:  # top_doc에서 제목, 날짜, URL 추출
             if url not in seen_urls:
-                response += f"제목: {title}, 날짜: {date} \n-----------------------------------------------------\n"
+                response += f"제목: {title}, 날짜: {date} \n----------------------------------------------------\n"
                 seen_urls.add(url)  # URL 추가하여 중복 방지
       if '채용' in query_noun:
         show_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_3_b&wr_id="
@@ -1210,11 +1210,11 @@ def get_ai_message(question):
             prof_name = match.group().strip()  # 숫자 이전의 문자열을 교수 이름으로 저장
         else:
             prof_name = prof_title.strip()  # 숫자가 없으면 전체 문자열을 교수 이름으로 저장
-            
+        professor_url= "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1"   
         if (final_url.startswith(url) for url in prof_url) and not any(keyword in prof_name for keyword in query_noun):
             data = {
                 "answer": "존재하지 않는 교수님 정보입니다. 자세한 정보는 교수진 페이지를 참고하세요.",
-                "references": final_url,
+                "references": professor_url,
                 "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
                 "images": ["No content"]
             }
