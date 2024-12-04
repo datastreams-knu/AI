@@ -61,22 +61,7 @@ redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def (func):
-    """
-    데코레이터: 함수 실행 시간을 측정합니다.
-    """
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        logging.info(f"Starting function: {func.__name__}")
-        result = func(*args, **kwargs)
-        elapsed_time = time.time() - start_time
-        logging.info(f"Finished function: {func.__name__} in {elapsed_time:.2f} seconds")
-        return result
-    return wrapper
-
-
 # 단어 명사화 함수.
-
 def transformed_query(content):
     # 중복된 단어를 제거한 명사를 담을 리스트
     query_nouns = []
