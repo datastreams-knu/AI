@@ -1119,7 +1119,7 @@ def get_ai_message(question):
       if top_doc !=None:
         for title, date, _, url in top_doc:  # top_doc에서 제목, 날짜, URL 추출
             if url not in seen_urls:
-                response += f"제목: {title}, 날짜: {date} \n--------------------------------------------------------------------------------------------------------------------------------------\n"
+                response += f"제목: {title}, 날짜: {date} \n-----------------------------------------------------\n"
                 seen_urls.add(url)  # URL 추가하여 중복 방지
       if '채용' in query_noun:
         show_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_3_b&wr_id="
