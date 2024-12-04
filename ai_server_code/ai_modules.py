@@ -1198,14 +1198,20 @@ def get_ai_message(question):
             f_time=time.time()-s_time
             print(f"get_ai_message 총 돌아가는 시간 : {f_time}")
             return data
+            
+        prof_title=final_title
+        prof_url=["https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2",
+                  "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1"]
+        prof_name=""
+        # 정규식을 이용하여 숫자 이전의 문자열을 추출
+        match = re.match(r"^[^\d]+",prof_title)
 
-        if (
-            final_url in [
-                "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor",
-                "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&lang=kor",
-            ]
-            or final_url.startswith("https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1&wr_id=")
-        ) and not any(keyword in final_title for keyword in query_noun):
+        if match:
+            prof_name = match.group().strip()  # 숫자 이전의 문자열을 교수 이름으로 저장
+        else:
+            prof_name = prof_title.strip()  # 숫자가 없으면 전체 문자열을 교수 이름으로 저장
+            
+        if (final_url.startswith(url) for url in prof_url) and not any(keyword in prof_name for keyword in query_noun):
             data = {
                 "answer": "존재하지 않는 교수님 정보입니다. 자세한 정보는 교수진 페이지를 참고하세요.",
                 "references": final_url,
