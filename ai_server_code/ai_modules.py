@@ -619,7 +619,7 @@ def best_docs(user_question):
       query_noun_time=time.time()-noun_time
       print(f"명사화 변환 시간 : {query_noun_time}")
       titles_from_pinecone, texts_from_pinecone, urls_from_pinecone, dates_from_pinecone = cached_titles, cached_texts, cached_urls, cached_dates
-      if len(query_noun)==0:
+      if not query_noun:
         return None,None
       #######  최근 공지사항, 채용, 세미나, 행사, 특강의 단순한 정보를 요구하는 경우를 필터링 하기 위한 매커니즘 ########
       remove_noticement = ['제일','가장','공고', '공지사항','필독','첨부파일','수업','컴퓨터학부','컴학','상위','정보','관련','세미나','행사','특강','강연','공지사항','채용','공고','최근','최신','지금','현재']
@@ -1112,7 +1112,7 @@ def get_ai_message(question):
     top_doc, query_noun = best_docs(question)  # 가장 유사한 문서 가져오기
     best_f_time=time.time()-best_time
     print(f"best_docs 뽑는 시간:{best_f_time}")
-    if len(query_noun)==0:
+    if not query_noun:
         notice_url = "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1"
         not_in_notices_response = {
             "answer": "해당 질문은 공지사항에 없는 내용입니다.\n 자세한 사항은 공지사항을 살펴봐주세요.",
