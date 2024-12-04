@@ -1221,7 +1221,7 @@ def get_ai_message(question):
         else:
             prof_name = prof_title.strip()  # 숫자가 없으면 전체 문자열을 교수 이름으로 저장
  
-        if (any(final_url.startswith(url) for url in prof_url) and not any(keyword in query_noun for keyword in prof_name)):
+        if (any(final_url.startswith(url) for url in prof_url) and prof_name not in query_noun:
             refer_url=""
             if '직원' in query_noun:
                 refer_url=prof_url[1]
