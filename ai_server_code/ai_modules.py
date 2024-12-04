@@ -1112,6 +1112,15 @@ def get_ai_message(question):
     top_doc, query_noun = best_docs(question)  # 가장 유사한 문서 가져오기
     best_f_time=time.time()-best_time
     print(f"best_docs 뽑는 시간:{best_f_time}")
+    if len(query_noun)==0:
+        notice_url = "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1"
+        not_in_notices_response = {
+            "answer": "해당 질문은 공지사항에 없는 내용입니다.\n 자세한 사항은 공지사항을 살펴봐주세요.",
+            "references": notice_url,
+            "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
+            "images": ["No content"]
+        }
+        return not_in_notices_response
     if len(query_noun)==1 and any(keyword in query_noun for keyword in ['채용','공지사항','세미나','행사','강연','특강']):
       seen_urls = set()  # 이미 본 URL을 추적하기 위한 집합
       response = f"'{query_noun[0]}'에 대한 정보 목록입니다:\n\n"
