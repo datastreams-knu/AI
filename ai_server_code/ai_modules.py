@@ -616,13 +616,12 @@ def find_url(url, title, doc_date, text, doc_url, number):
 
 def best_docs(user_question):
       # 사용자 질문
-      okt = Okt()
       noun_time=time.time()
       query_noun=transformed_query(user_question)
       query_noun_time=time.time()-noun_time
       print(f"명사화 변환 시간 : {query_noun_time}")
       titles_from_pinecone, texts_from_pinecone, urls_from_pinecone, dates_from_pinecone = cached_titles, cached_texts, cached_urls, cached_dates
-      if len(query_noun)==0:
+      if not query_noun:
         return None,None
       #######  최근 공지사항, 채용, 세미나, 행사, 특강의 단순한 정보를 요구하는 경우를 필터링 하기 위한 매커니즘 ########
       remove_noticement = ['제일','가장','공고', '공지사항','필독','첨부파일','수업','컴퓨터학부','컴학','상위','정보','관련','세미나','행사','특강','강연','공지사항','채용','공고','최근','최신','지금','현재']
@@ -830,7 +829,6 @@ def best_docs(user_question):
       # Step 1: Cluster documents by similarity
       cluster_time=time.time()
       clusters = cluster_documents_by_similarity(final_best_docs)
-      query_nouns=transformed_query(user_question)
       # print(clusters[0])
       # print(clusters[1])
       # 날짜 형식을 datetime 객체로 변환하는 함수
@@ -847,7 +845,7 @@ def best_docs(user_question):
           # 날짜를 비교해 더 최근 날짜를 가진 클러스터 선택
           #조금더 세밀하게 들어가자면?
           #print("세밀하게..")
-          if (any(keyword in word for word in query_nouns for keyword in keywords) or top_0_cluster_similar-clusters[len(clusters)-1][0][0]<=0.3):
+          if (any(keyword in word for word in query_noun for keyword in keywords) or top_0_cluster_similar-clusters[len(clusters)-1][0][0]<=0.3):
             #print("최근이거나 뽑은 문서들이 유사도 0.3이내")
             if (top_0_cluster_similar-clusters[len(clusters)-1][0][0]<=0.3):
               #print("최근이면서 뽑은 문서들이 유사도 0.3이내 real")
@@ -1116,6 +1114,15 @@ def get_ai_message(question):
     top_doc, query_noun = best_docs(question)  # 가장 유사한 문서 가져오기
     best_f_time=time.time()-best_time
     print(f"best_docs 뽑는 시간:{best_f_time}")
+    if not query_noun:
+        notice_url = "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1"
+        not_in_notices_response = {
+            "answer": "해당 질문은 공지사항에 없는 내용입니다.\n 자세한 사항은 공지사항을 살펴봐주세요.",
+            "references": notice_url,
+            "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
+            "images": ["No content"]
+        }
+        return not_in_notices_response
     if len(query_noun)==1 and any(keyword in query_noun for keyword in ['채용','공지사항','세미나','행사','강연','특강']):
       seen_urls = set()  # 이미 본 URL을 추적하기 위한 집합
       response = f"'{query_noun[0]}'에 대한 정보 목록입니다:\n\n"
@@ -1123,7 +1130,7 @@ def get_ai_message(question):
       if top_doc !=None:
         for title, date, _, url in top_doc:  # top_doc에서 제목, 날짜, URL 추출
             if url not in seen_urls:
-                response += f"제목: {title}, 날짜: {date} \n--------------------------------------------------------------------------------------------------------------------------------------\n"
+                response += f"제목: {title}, 날짜: {date} \n----------------------------------------------------\n"
                 seen_urls.add(url)  # URL 추가하여 중복 방지
       if '채용' in query_noun:
         show_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_3_b&wr_id="
@@ -1202,14 +1209,29 @@ def get_ai_message(question):
             f_time=time.time()-s_time
             print(f"get_ai_message 총 돌아가는 시간 : {f_time}")
             return data
-
-        if (final_url in [
-                "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2&lang=kor",
-                "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5&lang=kor",
-              ] or re.match(r"https://cse.knu.ac.kr/bbs/board.php\?bo_table=sub2_1&wr_id=\d+", final_url)) and not any(keyword in final_title for keyword in query_noun):
+            
+        prof_title=final_title
+        prof_url=["https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2",
+                  "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5",
+                  "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1"]
+        prof_name=""
+        # 정규식을 이용하여 숫자 이전의 문자열을 추출
+        match = re.match(r"^[^\d]+",prof_title)
+        
+        if match:
+            prof_name = match.group().strip()  # 숫자 이전의 문자열을 교수 이름으로 저장
+        else:
+            prof_name = prof_title.strip()  # 숫자가 없으면 전체 문자열을 교수 이름으로 저장
+ 
+        if (any(final_url.startswith(url) for url in prof_url)) and prof_name not in query_noun:
+            refer_url=""
+            if '직원' in query_noun:
+                refer_url=prof_url[1]
+            else:
+                refer_url=prof_url[2]
             data = {
                 "answer": "존재하지 않는 교수님 정보입니다. 자세한 정보는 교수진 페이지를 참고하세요.",
-                "references": final_url,
+                "references": refer_url,
                 "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
                 "images": ["No content"]
             }
