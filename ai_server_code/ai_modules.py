@@ -1201,7 +1201,7 @@ def get_ai_message(question):
             
         prof_title=final_title
         prof_url=["https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2",
-                  "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1"]
+                  "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5"]
         prof_name=""
         # 정규식을 이용하여 숫자 이전의 문자열을 추출
         match = re.match(r"^[^\d]+",prof_title)
@@ -1211,7 +1211,7 @@ def get_ai_message(question):
         else:
             prof_name = prof_title.strip()  # 숫자가 없으면 전체 문자열을 교수 이름으로 저장
         professor_url= "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1"   
-        if (final_url.startswith(url) for url in prof_url) and not any(keyword in prof_name for keyword in query_noun):
+        if ((final_url in prof_url) or (final_url.startswith(professor_url))) and not any(keyword in prof_name for keyword in query_noun):
             data = {
                 "answer": "존재하지 않는 교수님 정보입니다. 자세한 정보는 교수진 페이지를 참고하세요.",
                 "references": professor_url,
