@@ -614,7 +614,6 @@ def find_url(url, title, doc_date, text, doc_url, number):
 
 def best_docs(user_question):
       # 사용자 질문
-      okt = Okt()
       noun_time=time.time()
       query_noun=transformed_query(user_question)
       query_noun_time=time.time()-noun_time
@@ -828,7 +827,6 @@ def best_docs(user_question):
       # Step 1: Cluster documents by similarity
       cluster_time=time.time()
       clusters = cluster_documents_by_similarity(final_best_docs)
-      query_nouns=transformed_query(user_question)
       # print(clusters[0])
       # print(clusters[1])
       # 날짜 형식을 datetime 객체로 변환하는 함수
@@ -845,7 +843,7 @@ def best_docs(user_question):
           # 날짜를 비교해 더 최근 날짜를 가진 클러스터 선택
           #조금더 세밀하게 들어가자면?
           #print("세밀하게..")
-          if (any(keyword in word for word in query_nouns for keyword in keywords) or top_0_cluster_similar-clusters[len(clusters)-1][0][0]<=0.3):
+          if (any(keyword in word for word in query_noun for keyword in keywords) or top_0_cluster_similar-clusters[len(clusters)-1][0][0]<=0.3):
             #print("최근이거나 뽑은 문서들이 유사도 0.3이내")
             if (top_0_cluster_similar-clusters[len(clusters)-1][0][0]<=0.3):
               #print("최근이면서 뽑은 문서들이 유사도 0.3이내 real")
