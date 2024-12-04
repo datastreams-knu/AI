@@ -1215,16 +1215,21 @@ def get_ai_message(question):
         prof_name=""
         # 정규식을 이용하여 숫자 이전의 문자열을 추출
         match = re.match(r"^[^\d]+",prof_title)
-
+        
         if match:
             prof_name = match.group().strip()  # 숫자 이전의 문자열을 교수 이름으로 저장
         else:
             prof_name = prof_title.strip()  # 숫자가 없으면 전체 문자열을 교수 이름으로 저장
  
-        if (any(final_url.startswith(url) for url in prof_url) and not any(keyword in prof_name for keyword in query_noun)):
+        if (any(final_url.startswith(url) for url in prof_url) and not any(keyword in query_noun for keyword in prof_name)):
+            refer_url=""
+            if '직원' in query_noun:
+                refer_url=prof_url[1]
+            else:
+                refer_url=prof_url[2]
             data = {
                 "answer": "존재하지 않는 교수님 정보입니다. 자세한 정보는 교수진 페이지를 참고하세요.",
-                "references": prof_url[2],
+                "references": refer_url,
                 "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
                 "images": ["No content"]
             }
