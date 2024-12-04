@@ -670,10 +670,10 @@ def best_docs(user_question):
           seminar_url="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_4&wr_id="
           key = [keyword for keyword in other_key if keyword in user_question]
           return_docs=find_url(seminar_url,titles_from_pinecone,dates_from_pinecone,texts_from_pinecone,urls_from_pinecone,numbers)
-    recent_finish_time=time.time()-recent_time
-    print(f"최근 공지사항 문서 뽑는 시간 {recent_finish_time}")
-    if (len(return_docs)>0):
-        return return_docs,key
+        recent_finish_time=time.time()-recent_time
+        print(f"최근 공지사항 문서 뽑는 시간 {recent_finish_time}")
+        if (len(return_docs)>0):
+          return return_docs,key
 
 
       remove_noticement = ['제일','가장','공고', '공지사항','필독','첨부파일','수업','컴학','상위','관련']
