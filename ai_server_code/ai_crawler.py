@@ -55,7 +55,7 @@ from pymongo import MongoClient
 pinecone_api_key='pcsk_3pp5QX_EeyfanpYE8u1G2hKkyLnfhWQMUHvdbUJeBZdULHaFMV5j67XDQwqXDUCBtFLYpt'
 index_name = 'info'
 # Upstage API 키 선언
-upstage_api_key = 'up_pGRnryI1JnrxChGycZmswEZm934Tf'
+upstage_api_key = 'up_6hq78Et2phdvQWCMQLccIVpWJDF5R' 
 
 
 # Pinecone API 설정 및 초기화
@@ -157,11 +157,14 @@ class CharacterTextSplitter:
     def __init__(self, chunk_size=850, chunk_overlap=100):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-
     def split_text(self, text):
         chunks = []
+        if len(text) <= self.chunk_size:
+            return [text]
         for i in range(0, len(text), self.chunk_size - self.chunk_overlap):
-            chunks.append(text[i:i + self.chunk_size])
+            chunk = text[i:i + self.chunk_size]
+            if chunk:
+                chunks.append(chunk)
         return chunks
 
 text_splitter = CharacterTextSplitter(chunk_size=850, chunk_overlap=100)
