@@ -250,7 +250,7 @@ def fetch_titles_from_pinecone():
     # 메타데이터 기반 검색을 위한 임의 쿼리
     query_results = index.query(
         vector=[0] * 4096,  # Pinecone에서 사용 중인 벡터 크기에 맞게 0으로 채운 벡터
-        top_k=1250,         # 최대 1000개의 결과 가져오기
+        top_k=1400,         # 최대 1400개의 결과 가져오기
         include_metadata=True  # 메타데이터 포함
     )
 
