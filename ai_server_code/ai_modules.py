@@ -89,6 +89,20 @@ def transformed_query(content):
     for match in english_matches:
         content = re.sub(rf'\b{re.escape(match)}\b', '', content)
 
+    if '시간표' in content:
+        content=content.replace('시간표','')
+    if 'EXIT' in query_nouns:
+        query_nouns.append('출구')
+    if any(keyword in content for keyword in ['벤처아카데미','벤처아카데미']):
+      query_nouns.append("벤처아카데미")
+    if '군' in content:
+        query_nouns.append('군')
+    if '인컴' in content:
+        query_nouns.append('인공지능컴퓨팅')
+    if '인공' in content and '지능' in content and '컴퓨팅' in content:
+        query_nouns.append('인공지능컴퓨팅')
+    if '학부생' in content:
+        query_nouns.append('학부생')
     ## 직원 E9호관 있는거 추가하려고함.
     if '공대' in content:
         query_nouns.append('E')
@@ -179,10 +193,12 @@ def transformed_query(content):
         query_nouns.append('카카오')
         query_nouns.append('테크')
         query_nouns.append('캠퍼스')
-    if any(keyword in content for keyword in ['재이수','재수강']):
+    if '재이수' in content:
         query_nouns.append('재이수')
     if '과목' in content:
         query_nouns.append('강의')
+    if '강의' in content:
+        query_nouns.append('과목')
     if '수꾸' in content:
         query_nouns.append('수강꾸러미')
     if '계절' in content and '학기' in content:
@@ -301,45 +317,47 @@ def calculate_weight_by_days_difference(post_date, current_date, query_nouns):
     # 기준 날짜 (24-01-01 00:00) 설정
     baseline_date_str = "24-01-01 00:00"
     baseline_date = parse_date_change_korea_time(baseline_date_str)
-
+    graduate_weight = 1.0 if any(keyword in query_nouns for keyword in ['졸업', '인터뷰']) else 0
+    scholar_weight = 1.0 if '장학' in query_nouns else 0
     # 작성일이 기준 날짜 이전이면 가중치를 1.35로 고정
     if post_date <= baseline_date:
-        return 1.35
+        return 1.35 + graduate_weight / 5
 
     # '최근', '최신' 등의 키워드가 있는 경우, 최근 가중치를 추가
-    add_recent_weight = 1.0 if any(keyword in query_nouns for keyword in ['최근', '최신', '지금', '현재']) else 0
+    add_recent_weight = 1.5 if any(keyword in query_nouns for keyword in ['최근', '최신', '지금', '현재']) else 0
 
-    # **6일 단위 구분**: 최근 문서에 대한 세밀한 가중치 부여
-    if days_diff<=6:
-        return 1.355 + add_recent_weight
+    # **10일 단위 구분**: 최근 문서에 대한 세밀한 가중치 부여
+    if days_diff <= 6:
+        return 1.355 + add_recent_weight + graduate_weight + scholar_weight
     elif days_diff <= 12:
-        return 1.333 + add_recent_weight/1.3
+        return 1.330 + add_recent_weight / 3.0 + graduate_weight / 1.2 + scholar_weight / 1.5
     elif days_diff <= 18:
-        return 1.321 + add_recent_weight/1.9
+        return 1.321 + add_recent_weight / 5.0 + graduate_weight / 1.3 + scholar_weight / 2.0
     elif days_diff <= 24:
-        return 1.310 + add_recent_weight/2.6
+        return 1.310 + add_recent_weight / 7.0 + graduate_weight / 1.4 + scholar_weight / 2.5
     elif days_diff <= 30:
-        return 1.299 + add_recent_weight/3.1
+        return 1.290 + add_recent_weight / 9.0 + graduate_weight / 1.5 + scholar_weight / 3.0
     elif days_diff <= 36:
-        return 1.270 + add_recent_weight/3.5
-    elif days_diff<=  45:
-        return 1.250+ add_recent_weight/3.8
+        return 1.270 + graduate_weight / 1.6 + scholar_weight / 3.5
+    elif days_diff <= 45:
+        return 1.250 +graduate_weight / 1.7 + scholar_weight / 4.0
     elif days_diff <= 60:
-        return 1.230 + add_recent_weight/4.0
+        return 1.230 +graduate_weight / 1.8 + scholar_weight / 4.5
     elif days_diff <= 90:
-        return 1.210
+        return 1.210 +graduate_weight / 2.0 + scholar_weight / 5.0
+
     # **월 단위 구분**: 2개월 이후는 월 단위로 단순화
     month_diff = (days_diff - 90) // 30
     month_weight_map = {
-        0: 1.19 ,  # 2.5~3.5개월
-        1: 1.17 - add_recent_weight / 3,  # 3.5~4.5개월
-        2: 1.15 - add_recent_weight / 4,  # 4.5~5.5개월
-        3: 1.11 - add_recent_weight / 5,  # 5.5~6.5개월
-        4: 1.09 - add_recent_weight/6,
+        0: 1.19,
+        1: 1.17 - add_recent_weight / 6 - scholar_weight / 10,
+        2: 1.15 - add_recent_weight / 5 - scholar_weight / 9,
+        3: 1.13 - add_recent_weight / 4 - scholar_weight / 7,
+        4: 1.11 - add_recent_weight / 3  - scholar_weight / 5,
     }
 
-    # 기본 가중치 반환 (7.5개월 이후)
-    return month_weight_map.get(month_diff, 1-add_recent_weight/5)
+    # 기본 가중치 반환 (6개월 이후)
+    return month_weight_map.get(month_diff, 0.88 - add_recent_weight /2  - scholar_weight / 5)
 
 
 # 유사도를 조정하는 함수
@@ -384,12 +402,16 @@ def adjust_similarity_scores(query_noun, title,texts,similarities):
             similarities[idx] -= 2.0
         if not any(keyword in query_noun for keyword in["현장", "실습", "현장실습"]) and any(keyword in titl for keyword in ["현장실습","대체","기준"]):
             similarities[idx]-=2
-        if "외국인" not in query_noun and "외국인" in title:
+        if "외국인" not in query_noun and "외국인" in titl:
             similarities[idx]-=2.0
         if texts[idx] == "No content":
             similarities[idx] *=1.45# 본문이 "No content"인 경우 유사도를 높임
-        if '마일리지' in query_noun and '마일리지' in title:
-            similarities[idx]+=1
+        if '마일리지' in query_noun and '마일리지' in texts[idx]:
+            similarities[idx]+=2
+        if '인컴' in query_noun and any(keyword in titl for keyword in ['인컴','인공지능컴퓨팅']):
+          similarities[idx]+=3
+        if '신입생' in query_noun and '수강신청' in query_noun and '신입생' in titl and '수강신청' in titl:
+          similarities[idx]+=1.5
     return similarities
 
 
@@ -404,7 +426,7 @@ def last_filter_keyword(DOCS,query_noun,user_question):
             if not any(keyword in query_noun for keyword in["현장", "실습", "현장실습"]) and any(keyword in title for keyword in ["현장실습","대체","기준"]):
               score-=1.0
             # wr_id 뒤에 오는 숫자 추출
-            target_numbers = [27510, 27047, 27614, 27246, 25900, 27553, 25896, 28183,27807,25817]
+            target_numbers = [27510, 27047, 27614, 27246, 25900, 27553, 25896, 28183,27807,25817,25804]
 
             match = re.search(r"wr_id=(\d+)", url)
             if match:
@@ -421,6 +443,22 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                           score+=0.8
                         if '계절' in query_noun:
                             score-=2.0
+                        if '전과' in query_noun:
+                          score-=1.0
+                        if '유예' in query_noun and '학사' in query_noun and extracted_number==28183:
+                          score+=0.45
+            if '기념' in query_noun and '기념' in title and url=="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_4&wr_id=354":
+              score+=0.5
+            if '스탬프' not in query_noun and '스탬프' in title:
+              score-=0.5
+            if '기말' in query_noun and '기말' in title:
+                score+=1.0
+            if '중간' in query_noun and '중간' in title:
+                score+=1.0
+            if '졸업' in query_noun and '졸업' not in title and '포트폴리오' in query_noun and '포트폴리오' in title:
+              score-=1.0
+            if '졸업' in query_noun and '포트폴리오' in title and '졸업' in title and '포트폴리오' in query_noun:
+              score+=1.0
             if 'TUTOR' in title and 'TUTOR' not in query_noun:
                 score-=1.0
             class_word = ['신청', '취소', '변경']
@@ -428,6 +466,10 @@ def last_filter_keyword(DOCS,query_noun,user_question):
               if keyword in query_noun and '계절' in query_noun and keyword in title:
                   score += 1.3
                   break
+            if '자퇴' in title and '자퇴' in query_noun:
+                score+=1.0
+            if '전과' in title and '전과' in query_noun:
+              score+=1.0
             if '조기' in title and '조기' not in query_noun:
               score-=0.5    
             if '수강' in title:
@@ -439,7 +481,10 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                 else:
                   score+=0.8  
                 if '재이수' in query_noun:
-                  score+=2.0
+                  if '꾸러미' in title:
+                    score+=1.0
+                  else:
+                    score+=2.0
             if '설문' not in query_noun and '설문' in title:
                 score-=0.5
             if any(keyword in query_noun for keyword in ['군','군대']) and '군' in title:
@@ -470,14 +515,14 @@ def last_filter_keyword(DOCS,query_noun,user_question):
             if '겨울' in query_noun and any(keyword in title for keyword in['하계',"여름"]):
                 score-=1.0
             if '여름' in query_noun and any(keyword in title for keyword in['하계',"여름"]):
-                score+=0.4
+                score+=0.7
+                if '벤처아카데미' in query_noun:
+                  score+=2.0
             if '겨울' in query_noun and any(keyword in title for keyword in['겨울',"동계"]):
-                score+=0.4
-            if '변경' in query_noun and '변경' in text:
-                if '변경' in title:
-                  score+=0.8
-                else:
-                  score+=0.5
+                score+=0.7
+                if '벤처아카데미' in query_noun:
+                  score+=2.0
+ 
             if '1학기' in query_noun and '1학기' in title:
                 score+=1.0
             if '2학기' in query_noun and '2학기' in title:
@@ -495,7 +540,7 @@ def last_filter_keyword(DOCS,query_noun,user_question):
             if any(keyword in query_noun for keyword in ['복전','복수','복수전공']) and  any(keyword in title for keyword in ['복수']):
                 score+=0.7
             if not any(keyword in query_noun for keyword in ['복전','복수','복수전공']) and any(keyword in title for keyword in ['복수']):
-                score-=0.7
+                score-=1.4
             if any(keyword in title for keyword in ['심컴','심화컴퓨터전공','심화 컴퓨터공학','심화컴퓨터공학']):
               if any(keyword in user_question for keyword in['심컴','심화컴퓨터전공']):
                 score+=0.7
@@ -509,7 +554,9 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                 score-=0.8
             elif any(keyword in title for keyword in['인컴','인공지능컴퓨팅']):
               if any(keyword in user_question for keyword in ['인컴','인공지능컴퓨팅']):
-                score+=0.9
+                score+=0.7
+                if url=="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=27553":
+                  score+=1.0
               else:
                 score-=0.8
             if any(keyword in user_question for keyword in ['벤처','아카데미']) and any(keyword in title for keyword in ['벤처아카데미','벤처스타트업아카데미','벤처스타트업']):
@@ -520,7 +567,7 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                 else:
                   score+=2.0
             if any(keyword in text for keyword in ['계약학과', '대학원', '타대학원']) and not any(keyword in query_noun for keyword in ['계약학과', '대학원', '타대학원']):
-                score -= 0.4  # 유사도 점수를 0.4 낮추기
+                score -= 0.8  # 유사도 점수를 0.4 낮추기
             keywords = ['대학원', '대학원생']
 
             # 조건 1: 둘 다 키워드 포함
@@ -528,7 +575,10 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                 score += 2.0
             # 조건 2: query_noun에 없고, title에만 키워드가 포함된 경우
             elif not any(keyword in query_noun for keyword in keywords) and any(keyword in title for keyword in keywords):
-                score -= 2.0
+                if '학부생' in query_noun and '연구' in query_noun:
+                  score+=1.0
+                else:
+                  score -= 2.0
             if any(keyword in query_noun for keyword in ['대학원','대학원생']) and any (keyword in title for keyword in ['대학원','대학원생']):
                 score+=2.0
 
@@ -635,7 +685,8 @@ def best_docs(user_question):
       if not query_noun:
         return None,None
       #######  최근 공지사항, 채용, 세미나, 행사, 특강의 단순한 정보를 요구하는 경우를 필터링 하기 위한 매커니즘 ########
-      remove_noticement = ['제일','가장','공고', '공지사항','필독','첨부파일','수업','컴퓨터학부','컴학','상위','정보','관련','세미나','행사','특강','강연','공지사항','채용','공고','최근','최신','지금','현재']
+      remove_noticement = ['목록','리스트','내용','제일','가장','공고', '공지사항','필독','첨부파일','수업','업데이트',
+                           '컴퓨터학부','컴학','상위','정보','관련','세미나','행사','특강','강연','공지사항','채용','공고','최근','최신','지금','현재']
       query_nouns = [noun for noun in query_noun if noun not in remove_noticement]
       return_docs=[]
       key=None
@@ -983,7 +1034,7 @@ prompt_template = """당신은 경북대학교 컴퓨터학부 공지사항을 �
 4. 에이빅과 관련된 질문이 들어오면 임의로 판단해서 네 아니오 하지 말고 문서에 있는 내용을 그대로 알려주세요.
 5. 답변은 친절하게 존댓말로 제공하세요.
 6. 질문이 공지사항의 내용과 전혀 관련이 없다고 판단하면 응답하지 말아주세요. 예를 들면 "너는 무엇을 알까", "점심메뉴 추천"과 같이 일반 상식을 요구하는 질문은 거절해주세요.
-
+7. 에이빅 인정 관련 질문이 들어오면 계절학기인지 그냥 학기를 묻는것인지 질문을 체크해야합니다. 계절학기가 아닌 경우에 심컴,글솝,인컴 개설이 아니면 에이빅 인정이 안됩니다.
 답변:"""
 
 # PromptTemplate 객체 생성
@@ -1066,9 +1117,9 @@ def question_valid(question, top_docs, query_noun):
 학사 키워드가 포함되었더라도, 실제로 학부 정보가 필요하지 않은 질문을 "아니오"로 답변
 2. "예"로 판단하는 학사 관련 카테고리:
 경북대학교 컴퓨터학부 홈페이지에서 다루는 학사 정보를 다음과 같이 정의하고, 해당 내용에 대해서만 "예"로 답변합니다.
-수업 및 학점 관련 정보: 수강신청, 수강정정, 수강변경, 수강취소, 과목 운영 방식, 학점 인정, 복수전공 혹은 부전공 요건,교양강의와 관련된 질문, 전공강의와 관련된 질문, 심컴, 인컴, 글솦 학과에 관련된 질문, 강의 개선 관련 설문
+수업 및 학점 관련 정보: 수강신청, 수강정정, 수강변경, 수강취소, 기말고사, 중간고사, 과목 운영 방식, 학점 인정, 복수전공 혹은 부전공 요건,교양강의와 관련된 질문, 전공강의와 관련된 질문, 심컴, 인컴, 글솦 학과에 관련된 질문, 강의 개선 관련 설문
 학생 지원 제도: 장학금, 학과 주관 인턴십 프로그램, 멘토링 ,각종 장학생 선발, 학자금대출, 특정 지역의 학자금대출 관련 질문
-학사 행정 및 제도: 졸업 요건, 학적 관리, 필수 이수 요건, 증명서 발급, 학사 일정 등
+학사 행정 및 제도: 졸업 요건, 학적 관리, 필수 이수 요건, 증명서 발급, 학사 일정, 자퇴,복학, 휴학 등
 교수진 및 행정 정보: 교수진 연락처,번호,이메일, 학과 사무실 정보, 지도교수와 관련된 정보
 학부 주관 교내 활동:  각종 경진대회, 행사, 벤처프로그램 ,벤처아카데미,튜터(TUTOR) 관련 활동(근무일지 작성, 근무 기준) 튜터(TUTOR) 모집 및 비용 관련 질문, 다양한 프로그램(예: AEP 프로그램, CES 프로그램,미국 프로그램)
 신청 및 일정, 성인지 교육이나 인권 교육, 혹은 다른 교육에 관련된 일정
@@ -1221,33 +1272,33 @@ def get_ai_message(question):
             print(f"get_ai_message 총 돌아가는 시간 : {f_time}")
             return data
             
-        prof_title=final_title
-        prof_url=["https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2",
-                  "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5",
-                  "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1"]
-        prof_name=""
-        # 정규식을 이용하여 숫자 이전의 문자열을 추출
-        if any(final_url.startswith(url) for url in prof_url):
-            match = re.match(r"^[^\dA-Za-z]+", prof_title)
-            if match:
-                prof_name = match.group().strip()  # 숫자 이전의 문자열을 교수 이름으로 저장
-            else:
-                prof_name = prof_title.strip()  # 숫자가 없으면 전체 문자열을 교수 이름으로 저장
-            prof_name = re.sub(r"\s+", "", prof_name)
-            user_question = re.sub(r"\s+", "", question)
-            if prof_name not in user_question:
-                refer_url=""
-                if '직원' in query_noun:
-                    refer_url=prof_url[1]
-                else:
-                    refer_url=prof_url[2]
-                data = {
-                    "answer": "존재하지 않는 교수님 정보입니다. 자세한 정보는 교수진 페이지를 참고하세요.",
-                    "references": refer_url,
-                    "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
-                    "images": ["No content"]
-                }
-                return data
+        # prof_title=final_title
+        # prof_url=["https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_2",
+        #           "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_5",
+        #           "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1"]
+        # prof_name=""
+        # # 정규식을 이용하여 숫자 이전의 문자열을 추출
+        # if any(final_url.startswith(url) for url in prof_url):
+        #     match = re.match(r"^[^\dA-Za-z]+", prof_title)
+        #     if match:
+        #         prof_name = match.group().strip()  # 숫자 이전의 문자열을 교수 이름으로 저장
+        #     else:
+        #         prof_name = prof_title.strip()  # 숫자가 없으면 전체 문자열을 교수 이름으로 저장
+        #     prof_name = re.sub(r"\s+", "", prof_name)
+        #     user_question = re.sub(r"\s+", "", question)
+        #     if prof_name not in user_question:
+        #         refer_url=""
+        #         if '직원' in query_noun:
+        #             refer_url=prof_url[1]
+        #         else:
+        #             refer_url=prof_url[2]
+        #         data = {
+        #             "answer": "존재하지 않는 교수님 정보입니다. 자세한 정보는 교수진 페이지를 참고하세요.",
+        #             "references": refer_url,
+        #             "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
+        #             "images": ["No content"]
+        #         }
+        #         return data
 
         # 공지사항에 존재하지 않을 경우
         notice_url = "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1"
