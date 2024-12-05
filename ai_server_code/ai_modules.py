@@ -270,19 +270,15 @@ def fetch_titles_from_pinecone():
 def initialize_cache():
     global cached_titles, cached_texts, cached_urls, cached_dates
 
-    # Redis에서 캐시 데이터 읽기
+    # Pinecone에서 데이터를 가져옴
+    cached_titles, cached_texts, cached_urls, cached_dates = fetch_titles_from_pinecone()
+
+    # 데이터를 Redis에 저장 (직렬화, 덮어쓰기)
+    redis_client.set('pinecone_metadata', pickle.dumps((cached_titles, cached_texts, cached_urls, cached_dates)))
+
+    # Redis 데이터를 글로벌 변수에 로드
     cached_data = redis_client.get('pinecone_metadata')
-    if cached_data:
-        # Redis에서 데이터를 로드 (역직렬화)
-        cached_titles, cached_texts, cached_urls, cached_dates = pickle.loads(cached_data)
-    else:
-        # Redis에 데이터가 없으면 Pinecone에서 가져와 저장
-        cached_titles, cached_texts, cached_urls, cached_dates = fetch_titles_from_pinecone()
-
-        # 데이터를 Redis에 저장 (직렬화)
-        # redis_client.set('pinecone_metadata', pickle.dumps((cached_titles, cached_texts, cached_urls, cached_dates)))
-        redis_client.setex('pinecone_metadata', 3600, pickle.dumps((cached_titles, cached_texts, cached_urls, cached_dates)))  # TTL 설정
-
+    cached_titles, cached_texts, cached_urls, cached_dates = pickle.loads(cached_data)
 
                     #################################   24.11.16기준 정확도 측정완료 #####################################################
 ######################################################################################################################
