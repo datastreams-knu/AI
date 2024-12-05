@@ -179,7 +179,7 @@ def transformed_query(content):
         query_nouns.append('카카오')
         query_nouns.append('테크')
         query_nouns.append('캠퍼스')
-    if any(keyword in content for keyword in ['재이수','재수강']:
+    if any(keyword in content for keyword in ['재이수','재수강']):
         query_nouns.append('재이수')
     if '과목' in content:
         query_nouns.append('강의')
