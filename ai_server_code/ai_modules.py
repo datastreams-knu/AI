@@ -1227,7 +1227,7 @@ def get_ai_message(question):
                   "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1"]
         prof_name=""
         # 정규식을 이용하여 숫자 이전의 문자열을 추출
-        if any(f_url.startswith(url) for url in prof_url):
+        if any(final_url.startswith(url) for url in prof_url):
             match = re.match(r"^[^\dA-Za-z]+", prof_title)
             if match:
                 prof_name = match.group().strip()  # 숫자 이전의 문자열을 교수 이름으로 저장
