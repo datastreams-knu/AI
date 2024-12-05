@@ -179,12 +179,14 @@ def transformed_query(content):
         query_nouns.append('카카오')
         query_nouns.append('테크')
         query_nouns.append('캠퍼스')
-    if '재이수' in content:
+    if any(keyword in content for keyword in ['재이수','재수강']:
         query_nouns.append('재이수')
     if '과목' in content:
         query_nouns.append('강의')
     if '수꾸' in content:
         query_nouns.append('수강꾸러미')
+    if '계절' in content and '학기' in content:
+        query_nouns.append('수업')
     if '채용' in content and any(keyword in content for keyword in ['모집','공고']):
         if '모집' in content:
           content=content.replace('모집','')
@@ -317,27 +319,27 @@ def calculate_weight_by_days_difference(post_date, current_date, query_nouns):
     elif days_diff <= 12:
         return 1.333 + add_recent_weight/1.3
     elif days_diff <= 18:
-        return 1.311 + add_recent_weight/1.9
+        return 1.321 + add_recent_weight/1.9
     elif days_diff <= 24:
-        return 1.299 + add_recent_weight/2.6
+        return 1.310 + add_recent_weight/2.6
     elif days_diff <= 30:
-        return 1.277 + add_recent_weight/3.1
+        return 1.299 + add_recent_weight/3.1
     elif days_diff <= 36:
-        return 1.255 + add_recent_weight/3.5
+        return 1.270 + add_recent_weight/3.5
     elif days_diff<=  45:
-        return 1.233+ add_recent_weight/3.8
+        return 1.250+ add_recent_weight/3.8
     elif days_diff <= 60:
-        return 1.211 + add_recent_weight/4.0
+        return 1.230 + add_recent_weight/4.0
     elif days_diff <= 90:
-        return 1.200
+        return 1.210
     # **월 단위 구분**: 2개월 이후는 월 단위로 단순화
     month_diff = (days_diff - 90) // 30
     month_weight_map = {
-        0: 1.15 ,  # 2.5~3.5개월
-        1: 1.12 - add_recent_weight / 3,  # 3.5~4.5개월
-        2: 1.10 - add_recent_weight / 4,  # 4.5~5.5개월
-        3: 1.09 - add_recent_weight / 5,  # 5.5~6.5개월
-        4: 1.08 - add_recent_weight/6,
+        0: 1.19 ,  # 2.5~3.5개월
+        1: 1.17 - add_recent_weight / 3,  # 3.5~4.5개월
+        2: 1.15 - add_recent_weight / 4,  # 4.5~5.5개월
+        3: 1.11 - add_recent_weight / 5,  # 5.5~6.5개월
+        4: 1.09 - add_recent_weight/6,
     }
 
     # 기본 가중치 반환 (7.5개월 이후)
@@ -421,6 +423,17 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                     else:
                         if '폐강' not in query_noun:
                           score+=0.8
+                        if '계절' in query_noun:
+                            score-=2.0
+            if 'TUTOR' in title and 'TUTOR' not in query_noun:
+                score-=1.0
+            class_word = ['신청', '취소', '변경']
+            for keyword in class_word:
+              if keyword in query_noun and '계절' in query_noun and keyword in title:
+                  score += 1.3
+                  break
+            if '조기' in title and '조기' not in query_noun:
+              score-=0.5    
             if '수강' in title:
               if url=="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=28180":
                 score-=3.0
@@ -1218,27 +1231,27 @@ def get_ai_message(question):
                   "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub2_1"]
         prof_name=""
         # 정규식을 이용하여 숫자 이전의 문자열을 추출
-        match = re.match(r"^[^\d]+",prof_title)
-        
-        if match:
-            prof_name = match.group().strip()  # 숫자 이전의 문자열을 교수 이름으로 저장
-        else:
-            prof_name = prof_title.strip()  # 숫자가 없으면 전체 문자열을 교수 이름으로 저장
-        prof_name = re.sub(r"\s+", "", prof_name)
-        user_question = re.sub(r"\s+", "", question)
-        if (any(final_url.startswith(url) for url in prof_url)) and prof_name not in user_question:
-            refer_url=""
-            if '직원' in query_noun:
-                refer_url=prof_url[1]
+        if any(f_url.startswith(url) for url in prof_url):
+            match = re.match(r"^[^\dA-Za-z]+", prof_title)
+            if match:
+                prof_name = match.group().strip()  # 숫자 이전의 문자열을 교수 이름으로 저장
             else:
-                refer_url=prof_url[2]
-            data = {
-                "answer": "존재하지 않는 교수님 정보입니다. 자세한 정보는 교수진 페이지를 참고하세요.",
-                "references": refer_url,
-                "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
-                "images": ["No content"]
-            }
-            return data
+                prof_name = prof_title.strip()  # 숫자가 없으면 전체 문자열을 교수 이름으로 저장
+            prof_name = re.sub(r"\s+", "", prof_name)
+            user_question = re.sub(r"\s+", "", question)
+            if prof_name not in user_question:
+                refer_url=""
+                if '직원' in query_noun:
+                    refer_url=prof_url[1]
+                else:
+                    refer_url=prof_url[2]
+                data = {
+                    "answer": "존재하지 않는 교수님 정보입니다. 자세한 정보는 교수진 페이지를 참고하세요.",
+                    "references": refer_url,
+                    "disclaimer": "항상 정확한 답변을 제공하지 못할 수 있습니다. 아래의 URL들을 참고하여 정확하고 자세한 정보를 확인하세요.",
+                    "images": ["No content"]
+                }
+                return data
 
         # 공지사항에 존재하지 않을 경우
         notice_url = "https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1"
