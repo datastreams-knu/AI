@@ -193,9 +193,10 @@ def transformed_query(content):
         query_nouns.append('카카오')
         query_nouns.append('테크')
         query_nouns.append('캠퍼스')
-    keywords = ['재이수', '재 이수', '재 수강', '재수강']
+    re_keyword = ['재이수', '재 이수', '재 수강', '재수강']
     # 각 키워드를 빈 문자열로 치환
-    for keyword in keywords:
+    if any(key in content for key in re_keyword):
+      for keyword in re_keyword:
         query_nouns.append('재이수')
         content = content.replace(keyword, '')
     if '과목' in content:
