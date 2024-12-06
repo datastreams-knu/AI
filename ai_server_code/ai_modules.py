@@ -193,8 +193,11 @@ def transformed_query(content):
         query_nouns.append('카카오')
         query_nouns.append('테크')
         query_nouns.append('캠퍼스')
-    if any(keyword in content for keyword in ['재이수','재 이수','재 수강','재수강']):
+    keywords = ['재이수', '재 이수', '재 수강', '재수강']
+    # 각 키워드를 빈 문자열로 치환
+    for keyword in keywords:
         query_nouns.append('재이수')
+        content = content.replace(keyword, '')
     if '과목' in content:
         query_nouns.append('강의')
     if '강의' in content:
@@ -494,8 +497,10 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                 if '재이수' in query_noun:
                   if '꾸러미' in title:
                     score+=1.0
-                  else:
+                  elif '신청' in title:
                     score+=2.0
+                  else:
+                    score+=1.5
             if '설문' not in query_noun and '설문' in title:
                 score-=0.5
             if any(keyword in query_noun for keyword in ['군','군대']) and '군' in title:
