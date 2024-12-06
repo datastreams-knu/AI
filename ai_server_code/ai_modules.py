@@ -193,12 +193,21 @@ def transformed_query(content):
         query_nouns.append('카카오')
         query_nouns.append('테크')
         query_nouns.append('캠퍼스')
-    if '재이수' in content:
+    if any(keyword in content for keyword in ['재이수','재 이수','재 수강','재수강']):
         query_nouns.append('재이수')
     if '과목' in content:
         query_nouns.append('강의')
     if '강의' in content:
         query_nouns.append('과목')
+        query_nouns.append('강좌')
+    if '강좌' in content:
+        query_nouns.append('강좌')
+        contnet=content.replace('강좌','')
+    if '외국어' in content:
+        query_nouns.append('외국어') 
+        contnet=content.replace('외국어','')
+    if '부' in content and '전공' in content:
+        query_nouns.append('부전공') 
     if '수꾸' in content:
         query_nouns.append('수강꾸러미')
     if '계절' in content and '학기' in content:
@@ -402,6 +411,8 @@ def adjust_similarity_scores(query_noun, title,texts,similarities):
             similarities[idx] -= 2.0
         if not any(keyword in query_noun for keyword in["현장", "실습", "현장실습"]) and any(keyword in titl for keyword in ["현장실습","대체","기준"]):
             similarities[idx]-=2
+        if '외국어' in query_noun and '강좌' in query_noun and '신청' in titl:
+            similarities[idx]-=1.0
         if "외국인" not in query_noun and "외국인" in titl:
             similarities[idx]-=2.0
         if texts[idx] == "No content":
@@ -537,6 +548,8 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                   score+=0.7
                 else:
                   score-=1.0
+            if '부전공' in query_noun and '부전공' in title:
+                score+=1.0
             if any(keyword in query_noun for keyword in ['복전','복수','복수전공']) and  any(keyword in title for keyword in ['복수']):
                 score+=0.7
             if not any(keyword in query_noun for keyword in ['복전','복수','복수전공']) and any(keyword in title for keyword in ['복수']):
