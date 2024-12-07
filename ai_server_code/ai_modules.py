@@ -69,7 +69,7 @@ def transformed_query(content):
     query_nouns = []
 
     # 1. 숫자와 특정 단어가 결합된 패턴 추출 (예: '2024학년도', '1월' 등)
-    pattern = r'\d+(?:학년도|년|학년|월|일|학기|시|분|초|기|개|차)?'
+    pattern = r'\d+(?:학년도|년|학년|학번|월|일|학기|시|분|초|기|개|차)?'
     number_matches = re.findall(pattern, content)
     query_nouns += number_matches
     # 추출된 단어를 content에서 제거
@@ -452,7 +452,7 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                         if extracted_number==27047:
                            score+=0.3
                         else:
-                           score+=1.5
+                           score+=1.0
                     else:
                         if '폐강' not in query_noun:
                           score+=0.8
@@ -521,8 +521,6 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                 score-=0.4
             if '오픈소스' in query_noun and '오픈소스' in title:
                 score+=0.5
-            if 'SDG' in query_noun and 'SDG' in title:
-                score+=2.9
             if any(keyword in query_noun for keyword in ['인턴','인턴십'])  and any(keyword in query_noun for keyword in ['인도','베트남']):
                 score+=1.0
             if any(keyword in title for keyword in ['수요','조사']) and not any(keyword in query_noun for keyword in ['수요','조사']):
@@ -568,7 +566,10 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                   score-=0.7
             elif any(keyword in title for keyword in ['글로벌소프트웨어전공','글로벌SW전공','글로벌소프트웨어융합전공','글솝','글솦']):
               if any(keyword in user_question for keyword in ['글로벌소프트웨어융합전공','글로벌소프트웨어전공','글로벌SW전공','글솝','글솦']):
-                score+=0.7
+                if 'SDG' in title:
+                  score-=0.7
+                else:
+                  score+=0.7
               else:
                 score-=0.8
             elif any(keyword in title for keyword in['인컴','인공지능컴퓨팅']):
@@ -576,6 +577,8 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                 score+=0.7
                 if url=="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=27553":
                   score+=1.0
+                if 'SDG' in title:
+                    score-=0.7
               else:
                 score-=0.8
             if any(keyword in user_question for keyword in ['벤처','아카데미']) and any(keyword in title for keyword in ['벤처아카데미','벤처스타트업아카데미','벤처스타트업']):
