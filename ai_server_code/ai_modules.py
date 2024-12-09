@@ -385,7 +385,7 @@ def adjust_date_similarity(similarity, date_str,query_nouns):
     return similarity * weight
 
 # 사용자 질문에서 추출한 명사와 각 문서 제목에 대한 유사도를 조정하는 함수
-
+'''
 def adjust_similarity_scores(query_noun, title,texts,similarities):
 
     for idx, titl in enumerate(title):
@@ -426,6 +426,32 @@ def adjust_similarity_scores(query_noun, title,texts,similarities):
           similarities[idx]+=3
         if '신입생' in query_noun and '수강신청' in query_noun and '신입생' in titl and '수강신청' in titl:
           similarities[idx]+=1.5
+    return similarities
+'''
+
+def adjust_similarity_scores(query_noun, title, texts, similarities):
+    query_noun_set = set(query_noun)
+    title_tokens = [set(titl.split()) for titl in title]
+
+    for idx, titl_tokens in enumerate(title_tokens):
+        matching_noun = query_noun_set.intersection(titl_tokens)
+        
+        if texts[idx] == "No content":
+            similarities[idx] *= 1.5
+            if "국가장학금" in query_noun_set and "국가장학금" in titl_tokens:
+                similarities[idx] *= 5.0
+        
+        for noun in matching_noun:
+            len_adjustment = len(noun) * 0.21
+            similarities[idx] += len_adjustment
+            if re.search(r'\d', noun):  # 숫자 포함 여부
+                similarities[idx] += len(noun) * (0.22 if noun in titl_tokens else 0.19)
+
+        if query_noun_set.intersection({'대학원', '대학원생'}) and titl_tokens.intersection({'대학원', '대학원생'}):
+            similarities[idx] += 2.0
+        if not query_noun_set.intersection({'대학원', '대학원생'}) and '대학원' in titl_tokens:
+            similarities[idx] -= 2.0
+
     return similarities
 
 
