@@ -64,12 +64,13 @@ redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # 단어 명사화 함수.
+'''
 def transformed_query(content):
     # 중복된 단어를 제거한 명사를 담을 리스트
     query_nouns = []
 
     # 1. 숫자와 특정 단어가 결합된 패턴 추출 (예: '2024학년도', '1월' 등)
-    pattern = r'\d+(?:학년도|년|학년|학번|월|일|학기|시|분|초|기|개|차)?'
+    pattern = r'\d+(?:학년도|년|학년|월|일|학기|시|분|초|기|개|차)?'
     number_matches = re.findall(pattern, content)
     query_nouns += number_matches
     # 추출된 단어를 content에서 제거
@@ -265,6 +266,88 @@ def transformed_query(content):
 
     query_nouns = list(set(query_nouns))
     return query_nouns
+'''
+
+def transformed_query(content):
+    query_nouns = []
+    okt = Okt()
+
+    # 1. 패턴 매칭 및 사전 정의 키워드
+    patterns = {
+        r'\d+(?:학년도|년|학년|월|일|학기|시|분|초|기|개|차)?': lambda x: query_nouns.extend(x),
+        r'[a-zA-Z]+': lambda x: query_nouns.extend(word.upper() for word in x),
+    }
+
+    # 정규식 패턴 처리
+    for pattern, action in patterns.items():
+        matches = re.findall(pattern, content)
+        action(matches)
+        for match in matches:
+            content = content.replace(match, '')
+
+    # 2. 키워드 매핑 처리
+    keyword_map = {
+        '시간표': [],
+        'EXIT': ['출구'],
+        '벤처아카데미': ['벤처아카데미'],
+        '군': ['군', '군휴학', '군입대'],
+        '인컴': ['인공지능컴퓨팅'],
+        '학부생': ['학부생'],
+        '공대': ['E'],
+        '설명회': ['설명회'],
+        '컴학': ['컴퓨터학부'],
+        '컴퓨터': ['컴퓨터학부', '컴퓨터비전'],
+        '종프': ['종합설계프로젝트'],
+        '대회': ['경진대회'],
+        '튜터': ['TUTOR'],
+        '탑싯': ['TOPCIT'],
+        '시험': ['시험'],
+        '하계': ['여름', '하계'],
+        '동계': ['겨울', '동계'],
+        '겨울': ['겨울', '동계'],
+        '여름': ['여름', '하계'],
+        '성인지': ['성인지'],
+        '첨성인': ['첨성인'],
+        '글솦': ['글솝'],
+        '수꾸': ['수강꾸러미'],
+        '장학금': ['장학생', '장학'],
+        '장학생': ['장학금', '장학'],
+        '에이빅': ['에이빅', 'ABEEK'],
+        '선이수': ['선이수'],
+        '학자금': ['학자금'],
+        '오픈 소스': ['오픈소스'],
+        '오픈소스': ['오픈소스'],
+        '재이수': ['재이수'],
+        '재 수강': ['재이수'],
+        '과목': ['강의', '강좌'],
+        '강의': ['과목', '강좌'],
+        '강좌': ['강좌'],
+        '외국어': ['외국어'],
+        '부전공': ['부전공'],
+        '계절학기': ['수업'],
+        '채용': ['모집', '공고'],
+        '공지': ['공지사항'],
+        '사항': ['공지사항'],
+        '공지사항': ['공지사항'],
+        '사원': ['신입'],
+        '신입사원': ['신입'],
+        '카테캠': ['카카오', '테크', '캠퍼스']
+    }
+
+    # 키워드 매핑 적용
+    for keyword, additions in keyword_map.items():
+        if keyword in content:
+            query_nouns.extend(additions)
+            content = content.replace(keyword, '')
+
+    # 3. Okt 명사 추출
+    additional_nouns = [noun for noun in okt.nouns(content) if len(noun) > 1]
+    query_nouns.extend(additional_nouns)
+
+    # 4. 중복 제거 및 반환
+    query_nouns = list(dict.fromkeys(query_nouns))
+    return query_nouns
+
 
 ###################################################################################################
 
@@ -452,7 +535,7 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                         if extracted_number==27047:
                            score+=0.3
                         else:
-                           score+=1.0
+                           score+=1.5
                     else:
                         if '폐강' not in query_noun:
                           score+=0.8
@@ -521,6 +604,8 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                 score-=0.4
             if '오픈소스' in query_noun and '오픈소스' in title:
                 score+=0.5
+            if 'SDG' in query_noun and 'SDG' in title:
+                score+=2.9
             if any(keyword in query_noun for keyword in ['인턴','인턴십'])  and any(keyword in query_noun for keyword in ['인도','베트남']):
                 score+=1.0
             if any(keyword in title for keyword in ['수요','조사']) and not any(keyword in query_noun for keyword in ['수요','조사']):
@@ -566,10 +651,7 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                   score-=0.7
             elif any(keyword in title for keyword in ['글로벌소프트웨어전공','글로벌SW전공','글로벌소프트웨어융합전공','글솝','글솦']):
               if any(keyword in user_question for keyword in ['글로벌소프트웨어융합전공','글로벌소프트웨어전공','글로벌SW전공','글솝','글솦']):
-                if 'SDG' in title:
-                  score-=0.7
-                else:
-                  score+=0.7
+                score+=0.7
               else:
                 score-=0.8
             elif any(keyword in title for keyword in['인컴','인공지능컴퓨팅']):
@@ -577,8 +659,6 @@ def last_filter_keyword(DOCS,query_noun,user_question):
                 score+=0.7
                 if url=="https://cse.knu.ac.kr/bbs/board.php?bo_table=sub5_1&wr_id=27553":
                   score+=1.0
-                if 'SDG' in title:
-                    score-=0.7
               else:
                 score-=0.8
             if any(keyword in user_question for keyword in ['벤처','아카데미']) and any(keyword in title for keyword in ['벤처아카데미','벤처스타트업아카데미','벤처스타트업']):
